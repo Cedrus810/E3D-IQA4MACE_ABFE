@@ -39,9 +39,12 @@ class Langevin:
         self.T, self.dt, self.gamma = T, dt, gamma
         g = torch.Generator(device=pos.device).manual_seed(seed)
         self.g = g
-        sigma = torch.sqrt(KB * T / self.m)
+        # v_rms [A/fs] = sqrt(kT/m [eV/amu]) * sqrt(EV_PER_A_PER_AMU).
+        # Dividing instead of multiplying here makes velocities 10.2x too large
+        # and the kinetic energy 104x, which blows the system apart on the first
+        # step -- and looks like "the fragments drifted", not like a units bug.
+        sigma = torch.sqrt(KB * T / self.m * EV_PER_A_PER_AMU)
         self.vel = sigma * torch.randn(pos.shape, generator=g, device=pos.device)
-        self.vel /= np.sqrt(EV_PER_A_PER_AMU)      # into A/fs
         self._f = self.force(self.pos)
 
     def force(self, pos):
@@ -56,13 +59,54 @@ class Langevin:
         self.pos = self.pos + 0.5 * dt * self.vel                   # A
         c1 = np.exp(-self.gamma * dt * 1e-3)                        # O (gamma in 1/ps)
         c2 = np.sqrt(1 - c1 ** 2)
-        sigma = torch.sqrt(KB * self.T / m / a)
+        sigma = torch.sqrt(KB * self.T / m * a)
         self.vel = c1 * self.vel + c2 * sigma * torch.randn(
             self.pos.shape, generator=self.g, device=self.pos.device)
         self.pos = self.pos + 0.5 * dt * self.vel                   # A
         self._f = self.force(self.pos)
         self.vel += 0.5 * dt * self._f / m * a                      # B
         return self.pos
+
+    def temperature(self):
+        """Instantaneous temperature, K. The cheapest guard against a units
+        slip: it must sit near the setpoint, not 100x above it."""
+        ke = 0.5 * (self.m * self.vel ** 2).sum() / EV_PER_A_PER_AMU
+        dof = 3 * self.pos.shape[0]
+        return float(2 * ke / (dof * KB))
+
+
+def minimize(energy_fn, pos, n_steps=200, max_force=0.05, verbose=True):
+    """Relax to the ML potential before sampling.
+
+    A region carved out of an MM-equilibrated periodic box is not a minimum of
+    the ML potential: the two disagree on geometry, and the atoms at the carving
+    surface have lost neighbours. Starting MD there means starting from large
+    forces, and the trajectory leaves the physical region before it thermalises.
+
+    max_force is in eV/A; 0.05 is loose but enough to make MD stable.
+    """
+    import torch
+    p = pos.clone().detach().requires_grad_(True)
+    opt = torch.optim.LBFGS([p], max_iter=20, history_size=20,
+                            line_search_fn="strong_wolfe")
+
+    def closure():
+        opt.zero_grad()
+        U = energy_fn(p)
+        U.backward()
+        return U
+
+    for it in range(0, n_steps, 20):
+        opt.step(closure)
+        with torch.no_grad():
+            U = float(energy_fn(p))
+        f = p.grad.abs().max().item() if p.grad is not None else float("inf")
+        if verbose:
+            print(f"      minimise {it+20:4d}  U {U:+.6f} eV  "
+                  f"max|F| {f:.4f} eV/A", flush=True)
+        if f < max_force:
+            break
+    return p.detach()
 
 
 def sample(energy_fn, pos0, numbers, n_steps, n_equil=0, stride=10,

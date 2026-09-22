@@ -32,13 +32,17 @@ atom-removal order — it is the Shapley value, for the cost of one ordinary ABF
 
 Full design, measurements and go/no-go criteria: **[RESEARCH_PLAN_v2.md](RESEARCH_PLAN_v2.md)**
 (v1 is preserved as [PROJECT_PLAN_v1.md](PROJECT_PLAN_v1.md)).
+Where things stand right now, and what is half-done: **[STATUS.md](STATUS.md)**.
 
 ## Status — work in progress
 
-The gauging programme (WP1–WP7) is done and measured; the alchemical/MD
-programme (WP8–WP9) is just starting. Validation ladder: **A** dimers →
+The gauging programme (WP1–WP7) is done and measured, and the first complete
+five-term model is trained. WP8's machinery is built and verified end to end;
+what is missing is a free-energy calculation with real sampling — every result
+so far deliberately averages over fixed conformers to isolate the attribution
+arithmetic from sampling convergence. Validation ladder: **A** dimers →
 **B** FreeSolv solvation → **C** SAMPL host–guest → **D** protein–ligand ABFE
-(currently at stage **A/C** scale on DES370K dimers).
+(currently at stage **A** scale on DES370K dimers).
 
 - **Negative control reproduces** (WP1): without IQA supervision the node/edge
   split does not converge to IQA on its own — 28× off on synthetic labels, 49×
@@ -52,14 +56,25 @@ programme (WP8–WP9) is just starting. Validation ladder: **A** dimers →
 - **Order-independent attribution** (WP7): the diagonal path agrees with
   exhaustive Monte-Carlo Shapley to **0.82%** of the total.
 - **SAPT component supervision** (per-channel es/ex/ind/disp): closes 85% of
-  the gap to an edge-by-edge oracle, 84–94% on real SAPT data. Operating point:
-  `sapt+total`.
+  the gap to an edge-by-edge oracle, 84–94% on real SAPT data. Supervising only
+  the boundary *total* leaves the individual channels 3–7× larger than the true
+  components — a direct display of pair non-identifiability on real data.
+  Operating point: `sapt+total`.
+- **The alchemical Hamiltonian runs under OpenMM** (WP8): via
+  `openmm.PythonForce`, so nothing needs to be TorchScript-able and λ is an
+  ordinary attribute. The endpoint identity survives the bridge to 1.2e-7 eV.
 
-**Currently running:** arm **D** — the five-term joint training
-(`E + F + L_int + L_IQA + L_SAPT`) on the `organic` DES370K split. Arm C
-(E+F+L_int+L_IQA) is done: 2.08 meV/atom against the backbone's own energy,
-E_int within 1.5× of a dedicated interaction-energy model. Results land in
-`logs/joint_*.json` as each arm finishes.
+**First complete model** (arm D, five terms `E + F + L_int + L_IQA + L_SAPT`,
+frozen `mace-omol-0`, head only): 4.3 meV/atom against the backbone's own
+energy, 0.062 eV/Å forces, 0.53 kcal/mol interaction energies, 0.6–1.7 kcal/mol
+per SAPT component — 6–11× better channels than the unsupervised baseline, for
+about 2× on energy against arm C. That cost is an upper bound: D was still
+descending at 32k steps. Checkpoint in `ckpt/`, numbers in `logs/joint_*.json`.
+
+**Not yet done:** a free-energy calculation with real sampling (WP8/WP9), and
+real IQA labels — every node-gauge result to date uses a synthetic teacher, so
+they show that *a* gauge can be imposed on frozen features, not that the *IQA*
+gauge lives there.
 
 ## Repository layout
 
@@ -76,6 +91,7 @@ decomp/                 the package
   openmm_bridge.py      run the learned Hamiltonian inside OpenMM
 
 test_*.py               one experiment per file (see RESEARCH_PLAN_v2.md §13)
+                        endpoints / attribution / openmm run in seconds, no data
 prepare_data.py         one-time DES370K → train/val/test splits (by system, not by row)
 run_queue.sh            cluster queue for the experiment sequence
 RESEARCH_PLAN_v2.md     design + measurements (the real documentation)

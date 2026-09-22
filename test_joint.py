@@ -38,7 +38,8 @@ from decomp.losses import cross_fragment_sum, interaction_loss, sapt_loss
 from decomp.mace_adapter import MACEDecomposition
 from test_lint import BATCH, DEV, MODEL
 
-SAPT_N = 4      # es, ex, ind, disp
+SAPT_N = 4
+SAPT_SCALE = None   # dataset-level mean square per channel; set in __main__      # es, ex, ind, disp
 
 
 def load_split(config, split, n=None, seed=0):
@@ -166,7 +167,8 @@ def run(tag, w_E, w_F, w_I, w_int, w_sapt, train, test, steps, teacher,
             # S13.11); the total above pins the cancelling residue. Both, or
             # neither works.
             ls, _ = sapt_loss(out["D"], b["edge_index"], b["frag_id"],
-                              b["batch"][b["edge_index"][0]], sapt_ref, ng)
+                              b["batch"][b["edge_index"][0]], sapt_ref, ng,
+                              scale=SAPT_SCALE)
             loss = loss + w_sapt * ls
 
         opt.zero_grad(set_to_none=True); loss.backward(); opt.step(); sched.step()
@@ -240,6 +242,11 @@ if __name__ == "__main__":
 
     print(f"Joint training [{cfg}]  (device {DEV})", flush=True)
     train = load_split(cfg, "train", n_tr)
+    _sp = train[6] if len(train) > 6 else None
+    if _sp is not None:
+        _ok = np.isfinite(_sp).all(-1)
+        SAPT_SCALE = (_sp[_ok] ** 2).mean(0) if _ok.any() else None
+
     test = load_split(cfg, "test", 1000)
     print(f"  train {len(train[0]):,} ({len(set(train[5])):,} sys)  "
           f"test {len(test[0]):,} ({len(set(test[5])):,} sys)", flush=True)

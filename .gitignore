@@ -8,8 +8,11 @@ geometries/
 data/
 *.npz
 
-# Checkpoints
+# Checkpoints and cached tensors (regenerated; the feature/target caches are
+# tens of GiB)
 ckpt/
+*.pt
+*.npy
 
 # Run logs (keep the JSON result records)
 logs/*
@@ -23,6 +26,22 @@ training.o*
 # Local training launchers
 learn*.zsh
 
+# Scheduler / nohup output
+*.out
+*.err
+nohup.out
+slurm-*.out
+
 # Python
 __pycache__/
 *.pyc
+*.pyo
+.ipynb_checkpoints/
+.venv/
+venv/
+
+# Editors and OS
+.DS_Store
+*.swp
+.vscode/
+.idea/

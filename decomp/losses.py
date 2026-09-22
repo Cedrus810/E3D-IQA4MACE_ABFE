@@ -69,7 +69,8 @@ def interaction_loss(D, edge_index, frag_id, edge_batch, E_int_ref, n_graphs, ma
     return _masked_mean((E_int_pred - E_int_ref) ** 2, mask), E_int_pred
 
 
-def sapt_loss(D, edge_index, frag_id, edge_batch, sapt_ref, n_graphs, mask=None):
+def sapt_loss(D, edge_index, frag_id, edge_batch, sapt_ref, n_graphs, mask=None,
+              scale=None):
     """Multi-channel supervision against the SAPT decomposition.
 
     D must carry one channel per component. The components decompose the SAME
@@ -81,6 +82,11 @@ def sapt_loss(D, edge_index, frag_id, edge_batch, sapt_ref, n_graphs, mask=None)
     Each channel is normalised by its own mean square: the components differ by
     3x in magnitude (exchange is the largest), and without normalisation the
     loss would be dominated by exchange alone.
+
+    `scale` should be the DATASET-level mean square per channel. Computing it
+    from the batch makes the normaliser jump whenever a strongly interacting
+    pair lands in a batch of 16, and the loss trace stops being readable -- the
+    same per-batch scaling mistake already fixed once for L_int (S13.4).
 
     sapt_ref: [n_graphs, n_channels]. Rows with NaN (6.1% of DES370K lacks SAPT)
     are masked out per structure.
@@ -96,7 +102,11 @@ def sapt_loss(D, edge_index, frag_id, edge_batch, sapt_ref, n_graphs, mask=None)
         ok = ok & mask.bool()
     ref = torch.nan_to_num(ref)
 
-    scale = (ref[ok].pow(2).mean(0) if ok.any() else torch.ones(n, device=ref.device))
+    if scale is None:
+        scale = (ref[ok].pow(2).mean(0) if ok.any()
+                 else torch.ones(n, device=ref.device))
+    else:
+        scale = torch.as_tensor(scale, dtype=ref.dtype, device=ref.device)[:n]
     per_channel = ((pred - ref) ** 2 / scale.clamp(min=1e-12))
     return _masked_mean(per_channel.mean(-1), ok), pred
 

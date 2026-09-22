@@ -37,7 +37,8 @@ from decomp.losses import cross_fragment_sum, sapt_loss
 from decomp.mace_adapter import MACEDecomposition
 from test_lint import BATCH, DEV, MODEL
 
-SAPT_N = 4          # es, ex, ind, disp  (the 5th column is their total)
+SAPT_N = 4
+SAPT_SCALE = None   # dataset-level mean square per channel; set in __main__          # es, ex, ind, disp  (the 5th column is their total)
 TRAIN_E = None      # set in __main__; the scale for the total-energy loss
 _BB = None
 
@@ -159,7 +160,7 @@ def run(arm, train, test, steps, hidden, lr=1e-3, seed=7):
         eb = b["batch"][b["edge_index"][0]]
         if arm.startswith("sapt"):
             loss, _ = sapt_loss(D, b["edge_index"], b["frag_id"], eb,
-                                b["sapt"], ng)
+                                b["sapt"], ng, scale=SAPT_SCALE)
         else:
             loss = 0.0
         if arm != "sapt":
@@ -191,6 +192,11 @@ if __name__ == "__main__":
 
     print(f"SAPT multi-channel supervision [{cfg}]  ({DEV})", flush=True)
     train, test = load(cfg, "train", n_tr), load(cfg, "test", 2000)
+    _sp = train[6] if len(train) > 6 else None
+    if _sp is not None:
+        _ok = np.isfinite(_sp).all(-1)
+        SAPT_SCALE = (_sp[_ok] ** 2).mean(0) if _ok.any() else None
+
     ok = np.isfinite(train[5]).all(-1).mean()
     print(f"  train {len(train[0]):,} ({len(set(train[6])):,} sys, "
           f"{100*ok:.0f}% with SAPT)   test {len(test[0]):,} "

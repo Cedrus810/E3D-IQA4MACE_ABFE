@@ -565,12 +565,15 @@ not at WP9: adding an explicit electrostatic branch puts that energy outside
 `D_ij` and therefore outside lambda's control, which changes the alchemical
 Hamiltonian. Initial validation: neutral ligands only.
 
-**R6 - Deployment in condensed-phase MD.** OMol25 is non-periodic finite
-clusters with global charge and spin as model inputs; neither concept survives
-in a periodic solvated box. A solvated protein-ligand system is 3-5 x 10^4
-atoms. *Likely answer:* ML/MM with the ML region covering ligand plus pocket -
-but then the L/E boundary crosses into the MM region and `D_LE` must be
-redefined there. *Decide before Stage C.* v1 had no deployment plan at all.
+**R6 - Deployment in condensed-phase MD.** **Now measured (S13.13), and the
+answer is ML/MM.** Full ML on a 4,076-atom solvent box needs ~55 GiB and 11 days
+per lambda window; ML/MM over ligand-plus-near-water is ~200 ms/step and about
+66 h for a 12-window leg at 100 ps each. The consequence stands: `D_LE` exists
+only inside the ML region, so the per-atom attribution covers the near field and
+the far field is MM. OMol25's non-periodic training and global charge/spin
+inputs also rule out `mace-omol-0` for periodic boxes -- condensed-phase work
+uses `MACE-OFF24`, which is trained for organic condensed phase, handles PBC,
+and is the backbone where L_IQA helps the pair term (S13.5).
 
 **R7 - Scope.** Three papers is a multi-year programme. The work packages are
 ordered so WP1-WP4 stand alone; do not serialize the whole chain before the
@@ -1083,7 +1086,160 @@ CCSD(T)/SAPT labels, which is worth more than either result alone.
 are not usable, because the total is a small residue of cancelling components
 and must be supervised directly. Components plus total gets both.
 
-### 13.12 What these do not show
+### 13.12 The first complete model: five constraints at once
+
+`test_joint.py` arm D. Frozen `mace-omol-0`, head only (hidden=256, 4 pair
+channels), `organic`, 50,000 train, 32,000 steps. Five terms: E and F against
+the backbone's own output, L_IQA against a teacher, L_int against DES370K
+CCSD(T), and L_SAPT against the four components.
+
+    arm              E/atom        F     E_intra      E_int
+    C  +L_IQA+int   0.00208   0.03035   0.01500   0.40 kcal
+    D  +SAPT        0.00429   0.06210   0.02801   0.53 kcal
+
+    D per-channel:  es 0.893   ex 1.658   ind 0.648   disp 0.628 kcal/mol
+
+Every metric lands in a usable range at once: 4.3 meV/atom against the
+backbone's energy, 0.062 eV/A on forces, 0.53 kcal/mol on interaction energies
+(inside chemical accuracy), and 0.6-1.7 kcal/mol per SAPT component.
+
+**The trade against C.** Adding SAPT costs +106% on energy, +105% on forces,
++87% on the node gauge and +33% on the interaction total, and buys 6-11x on the
+per-channel distribution against the unsupervised `sum` baseline of S13.11
+(7.86 / 9.93 / 7.05 / 6.35). Joint training barely degrades the channels
+relative to isolated SAPT training (1.0-1.5x vs S13.11's 0.73 / 1.59 / 0.44 /
+0.44), so component supervision holds its ground among four competing terms.
+
+**D is probably not converged.** Its loss reached 0.107 at 32,000 steps and was
+still descending, where C plateaued at 0.0147. D carries one more loss term and
+four times the output channels, so it needs more steps than C, and how much of
+the +106% is a real cost rather than undertraining cannot be separated from this
+run. That would be the fourth time in this file that 32k-or-fewer steps produced
+a premature conclusion -- after sample size (S13.5), capacity (S13.6) and channel
+count (S13.11).
+
+A known contributor: `sapt_loss` normalises each channel by that batch's mean
+square. On batch 16 with heavy-tailed components this is the same per-batch
+scaling bug already fixed once for `L_int` (S13.4), and it makes D's gradient
+noisier than C's. Fix it and rerun longer before quoting the +106%.
+
+**The checkpoint** `ckpt/joint_organic_n50000_h256_s32000_D.pt` is the model for
+WP8 and WP9: a usable potential with a physically gauged, spatially resolved
+decomposition.
+
+### 13.13 Condensed-phase scaling: full ML is out of reach, ML/MM is the only route
+
+Measured on the prepared Atenolol solvent leg from `ABFE_IBS/Atenolol-rank11/
+output/` -- 1 ligand (41 atoms) plus 1,345 waters in a 3.5 nm periodic box,
+4,076 atoms, already parameterised and equilibrated. `MACE-OFF24_medium`
+(1.4M parameters, 640-dim features, r_max 6.0), head at hidden=256, one
+RTX 2080 Ti:
+
+      atoms    edges    peak GiB    ms/step
+        500   12,104        2.21       ~400
+      1,000   39,910        6.03        950
+      2,000       --         OOM         --
+
+At 6 A cutoff and water density each atom carries ~90 neighbours, so the full
+box is ~370k edges, extrapolating to **~55 GiB** -- impossible on 11 GiB and
+marginal on a 48 GiB A6000. Speed fails independently: 950 ms/step at 1,000
+atoms is 11 days per lambda window for 1 ns of sampling.
+
+**Full-ML condensed-phase ABFE is not reachable with this architecture**, by one
+to two orders of magnitude in both memory and time. This is a hardware-scale
+fact, not a tuning problem, and `mace-omol-0` is worse still (19456-dim
+features, and non-periodic training data).
+
+    route            ML region              ms/step   100 ps x 12 windows
+    ML/MM            ligand + near water        ~200            66 h
+    droplet          ~400 atoms, aperiodic      ~300            96 h
+    full ML          4,076 atoms                  --             OOM
+
+**ML/MM is the only viable route, and it forces a decision.** `D_LE` exists only
+for pairs inside the ML region, so with the ML region as ligand plus its nearest
+waters, the near-field ligand-water coupling comes from the decomposition and
+the far field from MM. For the total dG that is an ordinary ML/MM split. For the
+per-atom attribution it means the numbers cover the near field only -- probably
+where most of the signal is, but that has not been shown.
+
+`decomp/openmm_bridge.py` now has `from_abfe_output()` to load a prepared leg
+directly and `strip_ligand_environment_nonbonded()` to remove the MM
+ligand-environment terms the decomposition replaces, via exceptions so that
+water-water electrostatics and PME keep working.
+
+**This does not block WP8.** Every open methodological question -- lambda
+spacing, overlap, whether softcore is needed, the message-masking control
+(S7.1), attribution against Shapley -- lives in systems of 6 to 50 atoms, where
+sampling is minutes. Condensed phase is WP9's problem, and it now has measured
+numbers rather than an open risk (S11 R6).
+
+### 13.14 On a real ligand: the identities hold, and two things are much worse than the toy suggested
+
+`test_peel.py` with the trained arm-D head on `mace-omol-0`. Atenolol (41 atoms)
+plus its 100 nearest waters, carved from the prepared solvent leg in
+`ABFE_IBS/Atenolol-rank11/output/` after minimising the full 4,076-atom periodic
+box with OpenMM and its own MM force field. One configuration; the identities
+are per-configuration, so sampling is not needed to decide them.
+
+    direct      U(1) - U(0)      -1.685516 eV = -38.9 kcal/mol
+    decomposed  sum_i dU/dlambda -2.482702 eV = -57.3 kcal/mol
+    peeled      41 steps forward -1.685757
+    peeled      41 steps reverse -1.685482
+
+**The numbers are physical.** Negative, i.e. attractive, and -38.9 kcal/mol of
+interaction energy for a polar drug (amide, hydroxyl, ether, 2 N, 3 O) with 100
+waters is the right size. This is the project's first physically meaningful
+number on a real system rather than an identity check.
+
+**Atom-by-atom peeling is exact.** 41 sequential removals sum to the one-shot
+difference to 2.4e-4 eV, 1.4e-4 relative, and forward and reverse orders agree
+to 2.7e-4 eV -- the total is a state function, as it must be.
+
+**The TI-invisible term is 18.4 kcal/mol, 47% of the net coupling.**
+
+    sum D_ia        -2.483 eV      raw pair energies
+    + relaxation    +0.797 eV      polarisation cost of staying coupled
+    = U(1) - U(0)   -1.686 eV
+
+The graph mask is a step function: `keep = w > 0` leaves the graph complete for
+every lambda > 0 and cuts it only at lambda = 0. So TI along the path integrates
+`sum_a D_ia` and never sees the jump, which here is nearly half the answer. On a
+randomly initialised head the same gap was 4.2%; trained, it is 47% of the net
+coupling (32% of the raw pair sum). The physics is sensible -- pair terms attract
+by 57 kcal/mol, polarising the molecule to that state costs 18, net 39 -- but a
+TI protocol built on this path would be wrong by the polarisation term.
+
+**Per-atom order dependence exceeds the per-atom values themselves.**
+
+    atom   dU/dlambda_i   peel fwd   peel rev
+       1        -0.089      -0.720     -0.101
+       4        -0.109      -0.005     +0.479     sign flips
+       0        -0.135      +0.110     +0.334
+
+Sequential per-atom values span -0.72 to +0.48 eV and change by up to 0.619 eV
+(14.3 kcal/mol) with removal order -- more than most atoms contribute, and enough
+to flip signs. The diagonal-path column is both smaller in spread (-0.35 to
++0.14) and order-independent by construction. S13.8 measured 1.3% order
+dependence on a water dimer; on a real drug molecule it is the size of the
+signal. **That moves the diagonal path from "cleaner" to "the only usable
+route", and it is the strongest argument for the method so far.**
+
+**The fix is a two-stage protocol**, and the second stage is worth reporting in
+its own right:
+
+    dG = integral_0^1 <sum_a D_ia> dt      continuous, TI
+         + dG_cut                          one discrete Hamiltonian change, BAR
+
+`dG_cut` is the polarisation stabilisation of the ligand by its solvent -- a
+physical observable, not a correction term to be hidden.
+
+*Caveats.* One configuration, untested against sampling. `mace-omol-0` was
+trained on non-periodic finite clusters, so a droplet carved from a periodic box
+sits at the edge of its domain, worst at the carving surface (S11 R5/R6); larger
+`--n-solvent` shrinks that. The head was trained with a synthetic IQA teacher,
+so the node gauge is *a* gauge, not the IQA one.
+
+### 13.15 What these do not show
 
 The teacher's gauge is expressible from the frozen features by construction,
 because the teacher is itself a head on those features. The experiments show
@@ -1095,7 +1251,7 @@ Scale caveats: MACE-OFF24, water dimers, 32 structures, one element pair.
 Nothing here has touched OMol25, real IQA labels, or any molecule larger than
 six atoms.
 
-### 13.13 Next
+### 13.16 Next
 
     1. DONE (S13.4, S13.5). L_int reaches 0.27 kcal/mol on `organic`'s 228
        held-out systems. WP3 passes.
