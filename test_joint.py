@@ -24,6 +24,7 @@ Read-only on /home/ruigengji/MLP/mace and data/; downloads nothing.
 """
 
 import json
+import os
 import pathlib
 import re
 import sys
@@ -35,8 +36,9 @@ import torch
 import decomp  # noqa: F401
 from decomp.data import KCAL_PER_MOL_IN_EV, mace_batch
 from decomp.losses import cross_fragment_sum, interaction_loss, sapt_loss
+from decomp.clusters import coupling_labels, solvent_clusters
 from decomp.mace_adapter import MACEDecomposition
-from test_lint import BATCH, DEV, MODEL
+from test_lint import BATCH, DEV, MODEL, OUT
 
 SAPT_N = 4
 SAPT_SCALE = None   # dataset-level mean square per channel; set in __main__      # es, ex, ind, disp
@@ -91,6 +93,26 @@ def make_targets(bb, teacher, b):
     return E, F, t["E_intra"].detach()
 
 
+def _atom_batches(sizes, max_n, max_atoms):
+    """Consecutive index groups capped by count AND by total atoms.
+
+    DES370K dimers are <= 34 atoms, so BATCH * 34 never binds on them and a
+    dimer-only run groups exactly as before. Backbone-labelled clusters run to
+    113 atoms; without the atom cap a batch of 16 is 5x a dimer batch and
+    POLAR-1-L, already at 11 GiB on dimers, cannot hold it.
+    """
+    out, cur, na = [], [], 0
+    for i, s in enumerate(sizes):
+        if cur and (len(cur) == max_n or na + s > max_atoms):
+            out.append(cur)
+            cur, na = [], 0
+        cur.append(i)
+        na += s
+    if cur:
+        out.append(cur)
+    return out
+
+
 def precompute(bb, teacher, data, tag="", cache_path=None):
     """Targets depend only on frozen modules and fixed geometries, so compute
     them once. Doing it inside the training loop runs the backbone three times
@@ -107,8 +129,7 @@ def precompute(bb, teacher, data, tag="", cache_path=None):
         return blob
     pos_l, num_l, frag_l, E_l, q_l = data[:5]
     out, t0 = [], time.perf_counter()
-    for k in range(0, len(pos_l), BATCH):
-        j = list(range(k, min(k + BATCH, len(pos_l))))
+    for j in _atom_batches([len(p) for p in pos_l], BATCH, BATCH * 34):
         b = mace_batch([pos_l[i] for i in j], [num_l[i] for i in j], bb,
                        charges=[int(q_l[i]) for i in j],
                        frag_ids=[frag_l[i] for i in j], device=DEV)
@@ -134,6 +155,10 @@ def run(tag, w_E, w_F, w_I, w_int, w_sapt, train, test, steps, teacher,
     opt = torch.optim.Adam(model.head.parameters(), lr=lr)
     sched = torch.optim.lr_scheduler.CosineAnnealingLR(opt, steps)
     pos_l, num_l, frag_l, E_l, q_l = train[:5]
+    clu = train[7] if len(train) > 7 else None
+    ms_dimer = float(np.mean(E_l[~clu] ** 2)) if clu is not None \
+        else float(np.mean(E_l ** 2))
+    ms_clu = float(np.mean(E_l[clu] ** 2)) if clu is not None and clu.any() else 1.0
     rng = np.random.default_rng(0)
     # Absolute, not steps//8: at 32,000 steps that was one line every
     # 4,000 steps -- 15 minutes of silence that looks like a hang.
@@ -159,9 +184,22 @@ def run(tag, w_E, w_F, w_I, w_int, w_sapt, train, test, steps, teacher,
         if w_I:
             loss = loss + w_I * ((out["E_intra"] - I_ref) ** 2).mean() / I_ref.pow(2).mean().clamp(min=1e-12)
         if w_int:
-            li, _ = interaction_loss(out["D"], b["edge_index"], b["frag_id"],
-                                     b["batch"][b["edge_index"][0]], Eint_ref, ng)
-            loss = loss + w_int * li / float(np.mean(E_l ** 2))
+            eb = b["batch"][b["edge_index"][0]]
+            if clu is None:
+                li, _ = interaction_loss(out["D"], b["edge_index"], b["frag_id"],
+                                         eb, Eint_ref, ng)
+                loss = loss + w_int * li / ms_dimer
+            else:
+                # Separate normalisers. Cluster couplings are ~1 eV and dimer
+                # E_int ~0.02 eV, so one shared mean-square would put the
+                # CCSD(T) anchor 3 orders of magnitude below the backbone
+                # labels and quietly drop the only real data in the term.
+                m = torch.as_tensor(clu[j], dtype=torch.bool, device=DEV)
+                ld, _ = interaction_loss(out["D"], b["edge_index"], b["frag_id"],
+                                         eb, Eint_ref, ng, mask=~m)
+                lc, _ = interaction_loss(out["D"], b["edge_index"], b["frag_id"],
+                                         eb, Eint_ref, ng, mask=m)
+                loss = loss + w_int * (ld / ms_dimer + lc / ms_clu)
         if w_sapt:
             # The components pin how D is spread over the boundary (S13.10,
             # S13.11); the total above pins the cancelling residue. Both, or
@@ -257,15 +295,51 @@ if __name__ == "__main__":
     for p in teacher.parameters():
         p.requires_grad_(False)
 
-    stem = f"{cfg}_n{n_tr}_h{hidden}_s{steps}"
-    pathlib.Path("ckpt").mkdir(exist_ok=True)
-    results_path = pathlib.Path(f"logs/joint_{stem}.json")
+    # Many-body structures, labelled by the backbone itself. Dimers pin only
+    # the SUM over a few dozen cross edges, which leaves a per-edge bias free
+    # to grow with the system -- measured at -2.0 meV/edge, i.e. -3.1 eV of a
+    # -1.5 eV coupling on a 341-atom carve. See decomp/clusters.py.
+    n_clu = int(os.environ.get("E3D_CLUSTERS", 0))
+    clu = np.zeros(len(train[0]), dtype=bool)
+    if n_clu:
+        t0 = time.perf_counter()
+        cp, cn, cf = solvent_clusters(n=n_clu, rng=np.random.default_rng(1))
+        # ~0.19 s per label in float64 (three backbone passes each), so 10,000
+        # is half an hour every restart unless it lands on disk.
+        lab = OUT / f"data/clusters_{n_clu}.npy"
+        if lab.exists():
+            ce = np.load(lab)
+        else:
+            ce = coupling_labels(bb, cp, cn, cf, device=DEV)
+            (OUT / "data").mkdir(parents=True, exist_ok=True)
+            np.save(lab, ce)
+        train = (train[0] + cp, train[1] + cn, train[2] + cf,
+                 np.concatenate([train[3], ce]),
+                 np.concatenate([train[4], np.zeros(n_clu, dtype=train[4].dtype)]),
+                 np.concatenate([train[5], -np.arange(1, n_clu + 1)]),
+                 np.concatenate([train[6], np.full((n_clu, SAPT_N), np.nan)]),
+                 np.concatenate([clu, np.ones(n_clu, dtype=bool)]))
+        print(f"  + {n_clu:,} backbone-labelled clusters in "
+              f"{time.perf_counter()-t0:.0f}s: coupling "
+              f"{ce.min():+.2f} .. {ce.max():+.2f} eV, "
+              f"|mean| {np.abs(ce).mean():.2f}", flush=True)
+    else:
+        train = tuple(train) + (clu,)
+
+    # The cluster count belongs in every output name: the cached E/F targets
+    # and the trained head both depend on it, and reusing a dimer-only cache
+    # under a cluster run is silent and wrong.
+    tag = f"_c{n_clu}" if n_clu else ""
+    stem = f"{cfg}_n{n_tr}{tag}_h{hidden}_s{steps}"
+    for d in ("ckpt", "logs", "data"):
+        (OUT / d).mkdir(parents=True, exist_ok=True)
+    results_path = OUT / f"logs/joint_{stem}.json"
     rows = json.loads(results_path.read_text()) if results_path.exists() else {}
     if rows:
         print(f"  resuming: {sorted(rows)} already done", flush=True)
 
     cache = precompute(bb, teacher, train, " (train)",
-                       cache_path=f"data/targets_{cfg}_n{n_tr}.pt")
+                       cache_path=OUT / f"data/targets_{cfg}_n{n_tr}{tag}.pt")
     cases = {"A  E+F        ": (1, 1, 0, 0, 0),
              "B  +L_int     ": (1, 1, 0, 1, 0),
              "C  +L_IQA+int ": (1, 1, 0.1, 1, 0),
@@ -279,7 +353,7 @@ if __name__ == "__main__":
         print(f"  {tag}  hidden={hidden}", flush=True)
         rows[tag] = run(tag, *w, train, test, steps, teacher,
                         hidden=hidden, cache=cache,
-                        ckpt=f"ckpt/joint_{stem}_{tag.strip()[0]}.pt")
+                        ckpt=OUT / f"ckpt/joint_{stem}_{tag.strip()[0]}.pt")
         results_path.write_text(json.dumps(rows, indent=2))
 
     if not all(k in rows for k in cases):

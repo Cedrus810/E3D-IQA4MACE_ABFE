@@ -45,3 +45,6 @@ venv/
 *.swp
 .vscode/
 .idea/
+
+# Per-backbone run directories (logs/, ckpt/ and target caches)
+runs/

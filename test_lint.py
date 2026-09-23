@@ -14,6 +14,7 @@ Target: held-out MAE on sum D_AB vs E_int at chemical accuracy, ~1 kcal/mol
 Read-only on /home/ruigengji/MLP/mace and data/; downloads nothing.
 """
 
+import os
 import pathlib
 import sys
 import time
@@ -27,8 +28,15 @@ from decomp.losses import interaction_loss
 from decomp.mace_adapter import MACEDecomposition
 
 DEV = "cuda" if torch.cuda.is_available() else "cpu"
-MODEL = "/home/ruigengji/MLP/mace/mace-omol-0-extra-large-4M.model"
-BATCH = 16
+MODEL = os.environ.get(
+    "MACE_MODEL", "/home/ruigengji/MLP/mace/mace-omol-0-extra-large-4M.model")
+# Everything written during a run -- logs/, ckpt/ and the cached E/F targets --
+# hangs off this root, so a second backbone gets its own directory instead of
+# overwriting the first. It MUST: the E/F targets are the backbone's own energy,
+# so an omol target cache reused under POLAR trains against the wrong labels and
+# nothing complains. Read-only inputs (data/des370k_*.npz) stay in the repo.
+OUT = pathlib.Path(os.environ.get("E3D_OUT", "."))
+BATCH = int(os.environ.get("E3D_BATCH", 16))
 
 
 def load_split(config, split, n=None):

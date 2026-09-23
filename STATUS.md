@@ -1,4 +1,4 @@
-# Status — 2026-09-23 (rev 3)
+# Status — 2026-09-23 (rev 4)
 
 Snapshot of where the project stands. Numbers cite `RESEARCH_PLAN_v2.md §13`,
 which holds the full experimental record; this file is the short version plus
@@ -18,6 +18,7 @@ the things that are half-done and easy to forget.
 | — per-atom resolution of `D_ia` | done | SAPT components: 6–16×, toy and real data agree (§13.10, §13.11) |
 | — first complete model | done | five terms, all metrics usable (§13.12) |
 | 8 sampling + TI/MBAR pipeline | assembled; **a design flaw found and not yet fixed** | §13.14 |
+| — size extrapolation of `D_ij` | **fixed on POLAR-1-M** by backbone-labelled clusters; L retraining | below |
 | 9 validation ladder | blocked on scale | ML/MM is the only route (§13.13) |
 
 ## What exists in code
@@ -35,10 +36,14 @@ decomp/
   openmm_bridge.py    PythonForce bridge; loads prepared ABFE_IBS legs;
                       carves an ML region (whole residues, minimum image)
   hremd.py            replica exchange over lambda; torch or openmm backend
+  clusters.py         ligand + n-water clusters carved from a leg, coupling labelled by the frozen backbone (fp64)
 
 em_system.py          minimise a prepared leg with OpenMM's own MM force field
 run_abfe.py           two-leg double decoupling driver
 test_peel.py          peel the ligand atom by atom against a direct reference
+test_scale.py         head coupling vs backbone truth at n_solvent = 5..100
+test_polar.py         MACE-POLAR-1 adapter checks (box independence, batching, forces)
+run_polar.sh          POLAR-1 M/L training; CLUSTERS=10000 by default
 ```
 
 **Minimise with MM, score with ML.** Minimising a carved cluster with the
@@ -67,6 +72,10 @@ One configuration; the identities are per-configuration.
     forward vs reverse agrees to 2.7e-4 eV
 
 Sign and magnitude are right for a neutral polar drug. **Two things broke:**
+*(Rev 4: the size scan below shows this agreement is a coincidence of this one
+carve size, and that item 1's +0.797 eV is mostly absorbing a per-edge bias,
+not measuring polarisation. Item 2's order dependence also shrinks 8x once the
+bias is fixed.)*
 
 1. **TI would miss 47% of the answer.** The graph mask is `keep = w > 0`, a step
    function: the graph is complete for every lambda > 0 and cuts only at
@@ -86,6 +95,68 @@ Sign and magnitude are right for a neutral polar drug. **Two things broke:**
 segment plus one discrete graph-cut step by BAR. `dG_cut` is not a correction to
 hide — it is the ligand's polarisation stabilisation by solvent, a physical
 observable MM FEP cannot decompose out.
+
+## Size scan: a per-edge bias, and the fix (§13.15, §13.16)
+
+`test_scale.py` carves the same Atenolol frame at n_solvent = 5/10/20/50/100 and
+compares the head's coupling with the backbone's own
+`E(all) - E(ligand) - E(water)`. Heads trained on DES370K dimers only:
+
+    edges   POLAR-1-M direct-truth   omol direct-truth
+      229        -0.48 eV                +0.96 eV
+      423        -0.74                   +2.26
+      719        -1.63                   +2.69
+     1228        -2.94                   +2.77
+     1524        -4.25                   +0.07   <- the carve above
+
+- **POLAR-1-M**: linear in edge count, -2.0 meV/edge. `L_int` pins one scalar
+  per dimer to the *sum* of a few dozen cross edges; a uniform per-edge offset
+  is invisible there and grows as n_edges x delta in solution. This is the pair
+  non-identifiability of §13.10/13.11, now measured in the condensed phase.
+- **omol**: non-monotonic and sign-flipped (coupling repulsive at 4 of 5 sizes).
+  The 4% agreement above is where the curve happens to cross zero; the
+  "relaxation" term `direct - sumD` runs 45%–201% of the true coupling.
+- Not the long-range term: POLAR's electrostatic + electron energy is 9.9% of
+  this coupling, the head's error was 3.7x.
+- `truth` is an fp32 difference of three ~3e4 eV numbers: good to ±0.05 eV.
+
+**Fix:** the arm-D target is the backbone's own energy, so any geometry can be
+labelled for free. `decomp/clusters.py` cuts 10,000 ligand + 2–24 water clusters
+from `em_solvent.npz`; `test_joint.py` (`E3D_CLUSTERS`) adds `L_E + L_F` and a
+coupling loss pinning `sum D_LE` to the backbone coupling, normalised separately
+from the dimer `L_int`. Result on POLAR-1-M, 60k steps:
+
+    edges   direct-truth   old       Atenolol n=100      old POLAR-M   new
+      229     -0.18       -0.48      direct (eV)          -5.758       -1.757
+      423     -0.21       -0.74      sum D_ia             -4.654       -1.772
+      719     -0.25       -1.63      direct - sumD        -1.104       +0.014
+     1228     -0.29       -2.94      peel order, /atom     0.236        0.077
+     1524     -0.28       -4.25      peel vs direct        1.2e-4       4.6e-5
+
+Per-edge bias -2.0 -> -0.14 meV; the error no longer grows with size.
+n = 50/100 are larger than any training cluster (<= 24 waters), so those rows
+are real extrapolation. The cut term is now ~0, so ΣD alone carries the
+coupling. Cost on DES370K: `E_int` 0.393 -> 0.428 kcal/mol, E 2.54 -> 2.83
+meV/atom, F 30.1 -> 33.3 meV/Å.
+
+**Held-out frame** (`md50_solvent.npz`: em_solvent + 50 ps MM MD + MM
+minimise; ligand moved 5 Å, all waters rearranged; the carve has 2684 cross
+edges, not 1524):
+
+    edges  truth    new sumD  new direct  dir-tru   |  old sumD  old dir-tru
+      307  -0.91    -0.41     -0.95       -0.04     |  -0.89     -0.63
+      547  -1.13    -0.72     -1.26       -0.13     |  -1.75     -1.28
+      975  -1.64    -1.20     -1.75       -0.11     |  -3.31     -2.36
+     2127  -2.47    -1.75     -2.10       +0.36     |  -7.63     -6.05
+     2684  -2.84    -2.07     -0.78       +2.07     |  -9.92     -7.84
+
+- The per-edge bias fix holds out of sample: +0.34 vs -2.43 meV/edge, 7x.
+- **`direct` does not extrapolate**: good to 0.13 eV up to n=20 (training
+  cluster sizes), then +0.36 and +2.07 eV. The cut term `direct - sumD` is
+  -0.5 eV at n=5 and +1.3 eV at n=100 -- the "+0.014, ≈0" on the training frame
+  was memorisation of that box.
+- Next: clusters from many MD frames (the `ponytail:` in `clusters.py`), then
+  rescan on a frame not in training.
 
 ## The gap
 
@@ -123,6 +194,10 @@ why `hremd.py` has both backends rather than one tuned for dimers.
 
 ## Open items, in priority order
 
+0. **POLAR-1-L with clusters** (retraining now; first attempt OOMed at step
+   ~1750 while sharing the GPU with M). Then `test_scale.py` on it, and a
+   held-out frame/ligand for M and L. Re-evaluate whether item 1 is still
+   needed: with clusters the cut term is +0.014 eV, not 0.8.
 1. **Implement the two-stage protocol** (above). Until then any free energy
    from this pipeline is wrong by the polarisation term. Changes land in
    `lambda_mask.py` (an explicit cut Hamiltonian) and `run_abfe.py` (BAR after
@@ -153,7 +228,7 @@ configurations.** Each of those cost a full run.
 
 ## Environment
 
-`miniforge3/envs/openmm_dev_ubio` — e3nn 0.5.1, torch 2.12.1 (CUDA 13.0),
+`miniforge3/envs/openmm_dev_ubio` — e3nn 0.4.4 (downgraded for MACE-POLAR-1), torch 2.12.1 (CUDA 13.0),
 mace-torch 0.3.16, openmm 8.5.2, openmm-torch 1.5.1, openmm-ml 1.7, pymbar 4.0.3.
 Backbones in `/home/ruigengji/MLP/mace/`; `mace-omol-0-extra-large-4M` is the one
 used (51.3M parameters, 19456-dim node features, r_max 6.0, 82 elements, and it

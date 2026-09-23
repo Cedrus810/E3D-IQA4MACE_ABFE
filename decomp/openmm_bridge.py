@@ -15,6 +15,8 @@ import pathlib
 import numpy as np
 import torch
 
+from .data import polar_fields
+
 # OpenMM: kJ/mol and nm.  MACE: eV and Angstrom.
 EV_TO_KJ_PER_MOL = 96.48533212
 NM_TO_ANG = 10.0
@@ -53,6 +55,12 @@ class AlchemicalForce:
             "batch": torch.zeros(n, dtype=torch.long, device=self.device),
             "pbc": torch.tensor([False] * 3, dtype=torch.bool, device=self.device),
             "cell": torch.zeros(3, 3, dtype=self.dtype, device=self.device),
+            # POLAR only, and empty otherwise, so this path stays bit-identical
+            # for the backbones S13.14 was measured on. Two batch builders that
+            # disagree about the input dict is how a backbone works on dimers
+            # and dies here, so it is the same helper mace_batch uses.
+            **polar_fields(self.bb, self.r_max, 1,
+                           dtype=self.dtype, device=self.device),
             "total_charge": torch.tensor([float(charge)], dtype=torch.long,
                                          device=self.device),
             "total_spin": torch.tensor([float(multiplicity)], dtype=torch.long,

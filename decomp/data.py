@@ -13,6 +13,42 @@ import torch
 KCAL_PER_MOL_IN_EV = 0.043364104  # DES370K energies are kcal/mol; MACE works in eV
 
 
+def polar_fields(model, r_max, n_graphs=1, dtype=torch.float32, device="cpu"):
+    """The inputs `PolarMACE` reads that plain MACE does not.
+
+    Empty for every other backbone, deliberately. Plain MACE would ignore the
+    extra keys, but `cell` is not extra -- supplying one unconditionally would
+    change the input dict every `mace-omol-0` result in RESEARCH_PLAN_v2.md was
+    measured with. The baseline stays bit-identical; only POLAR takes the new
+    path.
+
+    A cell is needed only because PolarMACE builds its k-grid from one before it
+    knows the system is aperiodic. MACE's own non-periodic box is
+    (max|r| + 1) * 5 * r_max -- 120 A for a water dimer, and it grows with the
+    system. The k-grid scales as its cube and is then discarded (pbc all-False
+    selects the real-space evaluator), so that box costs ~600x more k-vectors
+    than 2 * r_max for the same energy, to the last bit. test_polar.py checks
+    ours against MACE's own box.
+
+    ponytail: only while pbc is all-False. A periodic run must pass its real
+    cell, volume and rcell, and this helper is then the wrong thing to call.
+    """
+    if type(model).__name__ != "PolarMACE":
+        return {}
+    box = 2.0 * float(r_max)
+    eye = torch.eye(3, dtype=dtype, device=device)
+    return {
+        # [n_graphs * 3, 3], MACE's own layout. A single [3, 3] happens to work
+        # for one graph and silently mismatches for more.
+        "cell": (eye * box).repeat(n_graphs, 1),
+        "rcell": (eye * (2.0 * np.pi / box)).repeat(n_graphs, 1),
+        "volume": torch.full((n_graphs,), box ** 3, dtype=dtype, device=device),
+        "pbc": torch.zeros(n_graphs, 3, dtype=torch.bool, device=device),
+        "fermi_level": torch.zeros(n_graphs, dtype=dtype, device=device),
+        "external_field": torch.zeros(n_graphs, 3, dtype=dtype, device=device),
+    }
+
+
 def mace_batch(positions, numbers, model, charges=None, spins=None,
                frag_ids=None, r_max=None, device="cpu", dtype=torch.float32):
     """Collate a list of structures into one MACE input dict.
@@ -58,6 +94,9 @@ def mace_batch(positions, numbers, model, charges=None, spins=None,
         "shifts": torch.zeros(e.shape[1], 3, dtype=dtype, device=device),
         "unit_shifts": torch.zeros(e.shape[1], 3, dtype=dtype, device=device),
         "cell": torch.zeros(3, 3, dtype=dtype, device=device),
+        # POLAR only; {} for every other backbone, and it overrides `cell`
+        # above because PolarMACE builds a k-grid from it. See polar_fields.
+        **polar_fields(model, r_max, ns, dtype=dtype, device=device),
         "batch": torch.cat(batch).to(device),
         "ptr": torch.tensor(ptr, device=device),
         "head": torch.zeros(ns, dtype=torch.long, device=device),

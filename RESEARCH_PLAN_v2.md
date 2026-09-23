@@ -1239,7 +1239,87 @@ sits at the edge of its domain, worst at the carving surface (S11 R5/R6); larger
 `--n-solvent` shrinks that. The head was trained with a synthetic IQA teacher,
 so the node gauge is *a* gauge, not the IQA one.
 
-### 13.15 What these do not show
+### 13.15 Size scan: the head carries a per-edge bias that grows with the system
+
+S13.14's agreement was checked against the backbone itself.
+`test_scale.py` carves the same Atenolol frame at n_solvent = 5..100 and compares
+the head with `truth = E(all) - E(ligand) - E(environment)`, which needs no head
+and no alchemy. Two dimer-trained arm-D heads (60k steps, h=256, 4 channels):
+
+    edges   truth   POLAR-1-M direct-truth   omol direct-truth
+      229   -0.60        -0.48                    +0.96
+      423   -0.87        -0.74                    +2.26
+      719   -1.11        -1.63                    +2.69
+     1228   -1.64        -2.94                    +2.77
+     1524   -1.51        -4.25                    +0.07   <- S13.14's carve
+
+**POLAR-1-M: linear, -2.0 meV per cross edge**, from 229 to 1524 edges. This is
+the pair non-identifiability of S13.10/13.11 in the condensed phase: `L_int`
+pins one scalar per dimer to the *sum* of 20-50 cross edges, so a uniform
+per-edge offset is invisible in training and becomes `n_edges x delta` in
+solution. More dimers cannot fix it; more edges per label can.
+
+**omol: non-monotonic and sign-flipped** -- the coupling is repulsive at four of
+five sizes. S13.14's 4% agreement is where this curve happens to cross zero, and
+the "+0.797 eV polarisation cost" (`direct - sumD`) runs 45%-201% of the true
+coupling across sizes. **S13.14's physical interpretation -- the magnitude and
+the 47% -- does not stand. Its identities (peel = direct, forward = reverse) do,
+they do not involve the truth.**
+
+Ruled out: double counting (both heads see the identical 1524-edge graph), and
+the long-range term (POLAR's electrostatic + electron energy is 9.9% of this
+coupling; the error was 3.7x). `truth` is an fp32 difference of three ~3e4 eV
+totals, good to +-0.05 eV.
+
+### 13.16 Backbone-labelled clusters remove the bias; one frame is not enough
+
+**The logic.** The arm-D target is the backbone's own energy, so the backbone
+labels any geometry and any whole-molecule partition exactly and for free:
+`E_couple = E(A u B) - E(A) - E(B)`, no QM. `decomp/clusters.py` cuts 10,000
+ligand + 2-24 water clusters from the minimised leg; `test_joint.py`
+(`E3D_CLUSTERS`) adds `L_E + L_F` and a coupling loss pinning `sum D_LE` to that
+label, normalised separately from the dimer `L_int`. The CCSD(T) and SAPT anchors
+stay on the dimers. POLAR-1-M, 60k steps:
+
+    DES370K test       dimers only   + clusters
+    E_int kcal/mol       0.393         0.428
+    E  meV/atom          2.54          2.83
+    F  meV/A             30.1          33.3
+
+A small price. On the training frame (`em_solvent.npz`) everything closes:
+direct-truth -0.18 .. -0.29 eV at every size, per-edge bias -0.14 meV, and
+Atenolol's `direct - sumD` falls from -1.104 to +0.014 eV, per-atom peel order
+dependence from 0.236 to 0.077 eV.
+
+**Held-out frame** (`md50_solvent.npz`: 50 ps MM MD from the training frame,
+then MM-minimised; ligand moved 5 A, every water rearranged; 2684 cross edges at
+n=100, not 1524):
+
+    edges  truth   new sumD  new direct  dir-tru  |  old sumD  old dir-tru
+      307  -0.91    -0.41     -0.95      -0.04    |   -0.89     -0.63
+      547  -1.13    -0.72     -1.26      -0.13    |   -1.75     -1.28
+      975  -1.64    -1.20     -1.75      -0.11    |   -3.31     -2.36
+     2127  -2.47    -1.75     -2.10      +0.36    |   -7.63     -6.05
+     2684  -2.84    -2.07     -0.78      +2.07    |   -9.92     -7.84
+
+**What held.** The per-edge bias fix is real out of sample: +0.34 vs
+-2.43 meV/edge, 7x smaller, and the error no longer grows linearly with size.
+`direct` is right to 0.13 eV through n=20. The diagnosis (per-edge
+non-identifiability) and the cure (more edges per label, labelled by the
+backbone) both work -- **the logic of the fix works.**
+
+**What did not.** Beyond the training cluster sizes (<= 24 waters) `direct`
+fails: +0.36 eV at n=50, +2.07 at n=100. The cut term `direct - sumD` is -0.5 eV
+at n=5 and +1.3 eV at n=100, so the training frame's +0.014 was memorisation of
+that one box, not physics. The remaining error sits in the E_intra response to
+cutting the graph, which is supervised only through clusters drawn from a
+single geometry.
+
+**Next:** clusters from 10-20 MM MD frames, each MM-minimised (the `ponytail:`
+in `clusters.py`), and larger clusters so n=50/100 are interpolation; retrain M,
+rescan on a frame outside training. POLAR-1-L waits for that.
+
+### 13.17 What these do not show
 
 The teacher's gauge is expressible from the frozen features by construction,
 because the teacher is itself a head on those features. The experiments show
@@ -1251,7 +1331,7 @@ Scale caveats: MACE-OFF24, water dimers, 32 structures, one element pair.
 Nothing here has touched OMol25, real IQA labels, or any molecule larger than
 six atoms.
 
-### 13.16 Next
+### 13.18 Next
 
     1. DONE (S13.4, S13.5). L_int reaches 0.27 kcal/mol on `organic`'s 228
        held-out systems. WP3 passes.
