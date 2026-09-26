@@ -1317,9 +1317,48 @@ single geometry.
 
 **Next:** clusters from 10-20 MM MD frames, each MM-minimised (the `ponytail:`
 in `clusters.py`), and larger clusters so n=50/100 are interpolation; retrain M,
-rescan on a frame outside training. POLAR-1-L waits for that.
+rescan on a frame outside training. POLAR-1-L was run first anyway
+(S13.17): it does not help.
 
-### 13.17 What these do not show
+### 13.17 A larger backbone does not help: POLAR-1-L
+
+Same recipe as S13.16 on MACE-POLAR-1-L: arm D, 10,000 single-frame clusters,
+60k steps, h=256 -- but batch 8, since L at batch 16 does not fit 11 GiB. Loss
+flat at ~0.04 over the last 10k steps. `runs/polar-L/logs/{joint,scale,scale_cpu}.log`.
+
+    DES370K test       M        L
+    E_int kcal/mol   0.428    0.537
+    E  meV/atom       2.83     3.60
+    F  meV/A          33.3     40.2
+
+Size scan, error against each backbone's own truth (eV unless marked):
+
+    training frame (em_solvent)          held-out frame (md50_solvent)
+    edges  sumD/edge meV  dir-tru        edges  sumD-tru       dir-tru
+           M      L       M      L              M      L       M      L
+      229  -0.44  -0.20   -0.20  -0.18     307  +0.50  +0.66   -0.04  +0.05
+      423  +0.10  +0.09   -0.21  -0.12     547  +0.41  +0.42   -0.13  -0.21
+      719  -0.09  -0.07   -0.25  -0.22     975  +0.44  +0.51   -0.11  -0.14
+     1228  -0.08  -0.04   -0.28  -0.39    2127  +0.72  +0.88   +0.36  +0.62
+     1524  -0.16  -0.24   -0.23  -0.75*   2684  +0.77  +1.07   +2.07  +1.13
+
+**L is worse or no better everywhere that matters.** Held out, its sumD error
+is larger at every size (fit +0.41 vs +0.34 meV/edge); its `direct` is better at
+n=100 and worse at n=50, and fails past the training cluster size just as M's
+does. It also costs 2.2x the training time (21,107 vs 9,416 s) and a 341-atom
+carve does not fit 11 GiB even for inference -- the n >= 50 rows ran on CPU.
+
+**The failure is shared, so it is not the backbone.** Both under-bind the
+held-out frame by 0.4-1 eV in sumD and both drift in `direct` beyond 24 waters.
+The one input they have in common is clusters drawn from one frame. POLAR-1-M
+stays the backbone.
+
+Caveats. Batch 8 vs 16 is not a matched comparison, but a batch effect would
+not reproduce the same failure pattern on both. *The L truth at 1524 edges
+came out -1.5234 eV, identical to M's to four decimals, where every other size
+differs between backbones by 0.02-0.06 eV; that row is unverified.
+
+### 13.18 What these do not show
 
 The teacher's gauge is expressible from the frozen features by construction,
 because the teacher is itself a head on those features. The experiments show
@@ -1331,25 +1370,55 @@ Scale caveats: MACE-OFF24, water dimers, 32 structures, one element pair.
 Nothing here has touched OMol25, real IQA labels, or any molecule larger than
 six atoms.
 
-### 13.18 Next
+### 13.19 Next: clusters from many frames
 
-    1. DONE (S13.4, S13.5). L_int reaches 0.27 kcal/mol on `organic`'s 228
-       held-out systems. WP3 passes.
-    2. DONE (S13.6). Not a capacity problem and not undertraining: both A and
-       C converge, ~3.4x apart on total energy, and the gap widens slightly
-       with training. The premium is affordable (2.08 meV/atom) and now
-       measured. Optional: rerun A at 32,000 steps to replace the estimate
-       with a measurement -- 2 h, and it will not change the conclusion.
-    3. Per-atom resolution of D_ia. First attempt failed (S13.9): SAPT
-       component supervision alone makes the total worse, and the experiment
-       measured the total rather than the pair distribution it was meant to
-       probe. Resolved in S13.10: measured directly, component supervision
-       closes 85% of the gap to an edge-by-edge oracle, and S13.11 confirms
-       84-94% on real SAPT data. Operating point is `sapt+total`. Next is
-       folding it into joint training alongside E, F and IQA.
-    4. Charged pairs (`full`, 3,691 systems) after `organic`.
-    5. Real IQA labels -> redo S13.2/S13.3. Still the decisive test of whether
-       the IQA gauge in particular lives in frozen features.
+The question: does `direct` extrapolate once clusters come from many
+geometries instead of one? S13.16/13.17 say one frame is memorised; nothing yet
+says many frames are enough. Backbone: POLAR-1-M only.
+
+**1. Frames** (CPU, OpenMM, no GPU). A new MM trajectory of the solvent leg from
+`em_solvent.npz` with a fresh velocity seed: discard 100 ps, then one frame
+every 50 ps to 1,050 ps -- 20 frames, each MM-minimised as in `em_system.py`.
+One more frame at 2 ns, never used in training, is a second test frame far from
+both the training frames and `md50_solvent.npz`. Output: `frames_solvent.npz`
+(positions stacked `[n_frames, n_atoms, 3]`, same metadata as `em_solvent.npz`)
+plus `md2000_solvent.npz`. `md50_solvent.npz` stays held out.
+
+**2. Clusters.** `solvent_clusters` takes the stacked frames and draws a frame
+per cluster. Same count (10,000), same sizes (2-24 waters) -- change one thing
+at a time, so a result says whether frame diversity alone is the fix.
+
+**3. Cache keys -- must change before any run.** `clusters_{n}.npy` and the
+`_c{n}` target tag in `test_joint.py` key only on the cluster count, so a
+multi-frame run would silently reuse the single-frame labels. The frame source
+goes into both names.
+
+**4. Train.** `TAGS=M ./run_polar.sh`: arm D, 60k steps, batch 16. About 0.5 h
+labels, 1 h target precompute, 2.6 h training on the 11 GiB card. Confirm the
+loss plateau before comparing (the recurring lesson of S13).
+
+**5. Measure.** `test_scale.py` on `md50_solvent.npz` and `md2000_solvent.npz`,
+and on `em_solvent.npz` for regression; DES370K from the run log.
+
+    pass if, on both held-out frames:
+      |direct - truth| <= 0.2 eV at n = 50 and 100   (now +0.36, +2.07)
+      |sumD fit| <= 0.1 meV/edge                      (now +0.34)
+    and DES370K E_int <= 0.45 kcal/mol                (now 0.428)
+
+**Then**, by outcome:
+
+- *Pass.* Measure the cut term `direct - sumD` across sizes. If it stays
+  within the truth noise (~0.05 eV), the two-stage protocol of S13.14 is not
+  needed; otherwise implement it. Then Stage A: decomposition vs the
+  message-masking control (S7.1) on a small system with real sampling.
+- *`direct` fine through n=20 but not beyond.* Size, not diversity: add clusters
+  up to 60 waters, with a smaller batch for cluster structures only.
+- *sumD still ~0.5 eV off at every size.* Not a sampling problem. Look at the
+  coupling loss weight and the E_intra response to the graph cut before
+  generating more data.
+
+Still open from before, unchanged: charged pairs (`full`, 3,691 systems); real
+IQA labels to redo S13.2/S13.3 (blocked on AIMAll); arm D rerun past 32k steps.
 
 Two implementation traps, both found the expensive way:
 

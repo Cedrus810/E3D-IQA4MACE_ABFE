@@ -339,7 +339,8 @@ if __name__ == "__main__":
         print(f"  resuming: {sorted(rows)} already done", flush=True)
 
     cache = precompute(bb, teacher, train, " (train)",
-                       cache_path=OUT / f"data/targets_{cfg}_n{n_tr}{tag}.pt")
+                       cache_path=OUT / f"data/targets_{cfg}_n{n_tr}{tag}"
+                                        f"{'' if BATCH == 16 else f'_b{BATCH}'}.pt")
     cases = {"A  E+F        ": (1, 1, 0, 0, 0),
              "B  +L_int     ": (1, 1, 0, 1, 0),
              "C  +L_IQA+int ": (1, 1, 0.1, 1, 0),

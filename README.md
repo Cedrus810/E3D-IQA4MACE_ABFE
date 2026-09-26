@@ -71,6 +71,14 @@ per SAPT component — 6–11× better channels than the unsupervised baseline, 
 about 2× on energy against arm C. That cost is an upper bound: D was still
 descending at 32k steps. Checkpoint in `ckpt/`, numbers in `logs/joint_*.json`.
 
+**Condensed phase** (Atenolol + up to 100 waters, backbone now
+`MACE-POLAR-1-M`): dimer-trained heads carry a per-edge bias of -2.0 meV per
+cross edge that grows with the system; clusters labelled by the frozen backbone
+itself cut it 7× out of sample. The coupling still fails to extrapolate past the
+training cluster size, on both POLAR-1-M and -L, because every cluster comes from
+one frame; clusters from many MD frames are next (`RESEARCH_PLAN_v2.md`
+§13.15–13.19).
+
 **Not yet done:** a free-energy calculation with real sampling (WP8/WP9), and
 real IQA labels — every node-gauge result to date uses a synthetic teacher, so
 they show that *a* gauge can be imposed on frozen features, not that the *IQA*
@@ -88,10 +96,15 @@ decomp/                 the package
   data.py               DES370K dimer batches
   fe.py                 TI along the diagonal path, MBAR (WP8)
   sampling.py           Langevin sampling on the alchemical Hamiltonian
-  openmm_bridge.py      run the learned Hamiltonian inside OpenMM
+  openmm_bridge.py      run the learned Hamiltonian inside OpenMM; carve an ML region
+  hremd.py              replica exchange over lambda
+  clusters.py           solvent clusters labelled by the frozen backbone
 
 test_*.py               one experiment per file (see RESEARCH_PLAN_v2.md §13)
                         endpoints / attribution / openmm run in seconds, no data
+test_scale.py           head coupling vs backbone truth, n_solvent = 5..100
+run_polar.sh            MACE-POLAR-1 training (one output directory per backbone)
+em_system.py            MM-minimise a prepared ABFE leg
 prepare_data.py         one-time DES370K → train/val/test splits (by system, not by row)
 run_queue.sh            cluster queue for the experiment sequence
 RESEARCH_PLAN_v2.md     design + measurements (the real documentation)
@@ -100,8 +113,9 @@ PROJECT_PLAN_v1.md      v1 framing, superseded
 
 ## Reproduce
 
-Environment: `e3nn >= 0.5.1`, `torch`, `mace-torch`, `pymbar`, `openmm`.
-(dev env: miniforge, e3nn 0.5.1 / torch 2.12.1 / mace-torch 0.3.16)
+Environment: `e3nn`, `torch`, `mace-torch`, `pymbar`, `openmm`.
+(dev env: miniforge, e3nn 0.4.4 -- downgraded for MACE-POLAR-1 -- / torch 2.12.1 /
+mace-torch 0.3.16; full list in STATUS.md)
 
 ```bash
 # 1. Download DES370K from DESRES (https://www.deshawresearch.com/downloads/)

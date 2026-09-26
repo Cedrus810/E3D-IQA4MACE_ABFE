@@ -48,3 +48,6 @@ venv/
 
 # Per-backbone run directories (logs/, ckpt/ and target caches)
 runs/
+
+# Local reading material
+*.pdf

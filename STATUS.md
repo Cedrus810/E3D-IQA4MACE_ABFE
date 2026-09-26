@@ -1,8 +1,38 @@
-# Status — 2026-09-23 (rev 4)
+# Status — 2026-09-26 (rev 6)
 
 Snapshot of where the project stands. Numbers cite `RESEARCH_PLAN_v2.md §13`,
 which holds the full experimental record; this file is the short version plus
 the things that are half-done and easy to forget.
+
+## Current conclusions
+
+What stands, with the number that supports it:
+
+1. **A node gauge can be imposed on frozen backbone features** at almost
+   unchanged E/F: 28× (toy), 49× (`mace-omol-0`) off without supervision
+   (§13.1–13.3). Synthetic teacher only -- not yet shown for the *IQA* gauge.
+2. **`L_int` pins the pair sum**: `Σ D_AB` to 0.27 kcal/mol on 228 held-out
+   DES370K systems (`mace-omol-0`, §13.5); 0.43 kcal/mol on the DES370K test
+   split for the current POLAR-1-M head.
+3. **The alchemical arithmetic is exact**: graph masking passes all endpoint
+   identities, edge-only scaling is off by 5.9% (§13.7); the diagonal path equals
+   Shapley to 0.82% (§13.8); peel = direct to 1e-4 on a 341-atom carve.
+4. **SAPT supervision resolves individual pairs**: 6–16× better channels, toy
+   and real data agree (§13.10, §13.11).
+5. **Dimer-only heads carry a per-edge bias** (-2.0 meV/edge, grows with the
+   system); **backbone-labelled clusters remove it**: -0.14 meV/edge on the
+   training frame, +0.34 held out, 7× smaller (§13.15, §13.16).
+6. **Backbone: POLAR-1-M.** `mace-omol-0` sign-flips at scale (§13.15);
+   POLAR-1-L is no better and 2.2× the cost (§13.17).
+
+What does not stand, or is not yet known:
+
+7. **`direct` does not extrapolate** past the training cluster size: held out,
+   +0.36 eV at n=50 and +2.07 at n=100. Clusters from one frame are memorised,
+   on both M and L. Next experiment: §13.19.
+8. **§13.14's physics is withdrawn**: the "47% polarisation" (+0.797 eV) was a
+   per-edge bias. Its identities (peel = direct, forward = reverse) stand.
+9. **No free energy with real sampling, and no real IQA labels**, yet.
 
 ## Work packages
 
@@ -18,7 +48,7 @@ the things that are half-done and easy to forget.
 | — per-atom resolution of `D_ia` | done | SAPT components: 6–16×, toy and real data agree (§13.10, §13.11) |
 | — first complete model | done | five terms, all metrics usable (§13.12) |
 | 8 sampling + TI/MBAR pipeline | assembled; **a design flaw found and not yet fixed** | §13.14 |
-| — size extrapolation of `D_ij` | **fixed on POLAR-1-M** by backbone-labelled clusters; L retraining | below |
+| — size extrapolation of `D_ij` | **fixed on POLAR-1-M** by backbone-labelled clusters; L tested, no gain — M is the backbone | below |
 | 9 validation ladder | blocked on scale | ML/MM is the only route (§13.13) |
 
 ## What exists in code
@@ -158,6 +188,16 @@ edges, not 1524):
 - Next: clusters from many MD frames (the `ponytail:` in `clusters.py`), then
   rescan on a frame not in training.
 
+## POLAR-1-L: no gain over M (§13.17)
+
+Same recipe as M but batch 8 (L at 16 does not fit 11 GiB). DES370K: E 2.83 ->
+3.60 meV/atom, F 33.3 -> 40.2 meV/Å, `E_int` 0.428 -> 0.537 kcal/mol. Held out,
+sumD is worse at every size (+0.41 vs +0.34 meV/edge) and `direct` fails past 24
+waters exactly as on M. Same failure on both backbones -> the bottleneck is the
+one-frame clusters, not backbone size. Full table in §13.17; logs in
+`runs/polar-L/logs/scale*.log`. The 1524-edge training-frame row is unverified
+(L's truth equals M's to four decimals).
+
 ## The gap
 
 **No free-energy calculation with real sampling has been done yet.** The
@@ -194,12 +234,14 @@ why `hremd.py` has both backends rather than one tuned for dimers.
 
 ## Open items, in priority order
 
-0. **POLAR-1-L with clusters** (retraining now; first attempt OOMed at step
-   ~1750 while sharing the GPU with M). Then `test_scale.py` on it, and a
-   held-out frame/ligand for M and L. Re-evaluate whether item 1 is still
-   needed: with clusters the cut term is +0.014 eV, not 0.8.
-1. **Implement the two-stage protocol** (above). Until then any free energy
-   from this pipeline is wrong by the polarisation term. Changes land in
+0. **Clusters from many MD frames, on POLAR-1-M** -- the full plan with pass
+   criteria is §13.19. First code change: the cluster and target cache names
+   must include the frame source, or the run silently reuses single-frame
+   labels. Frames come from CPU OpenMM, so this does not need the GPU until
+   training.
+1. **Two-stage protocol** (above) -- only if §13.19 leaves a cut term
+   `direct - sumD` above the truth noise; until decided, any free energy
+   from this pipeline may be off by that term. Changes land in
    `lambda_mask.py` (an explicit cut Hamiltonian) and `run_abfe.py` (BAR after
    the TI segment).
 2. **Then the Stage A comparison**: decomposition vs message-masking baseline.
@@ -230,8 +272,9 @@ configurations.** Each of those cost a full run.
 
 `miniforge3/envs/openmm_dev_ubio` — e3nn 0.4.4 (downgraded for MACE-POLAR-1), torch 2.12.1 (CUDA 13.0),
 mace-torch 0.3.16, openmm 8.5.2, openmm-torch 1.5.1, openmm-ml 1.7, pymbar 4.0.3.
-Backbones in `/home/ruigengji/MLP/mace/`; `mace-omol-0-extra-large-4M` is the one
-used (51.3M parameters, 19456-dim node features, r_max 6.0, 82 elements, and it
+Backbones in `/home/ruigengji/MLP/mace/`. Current backbone: `MACE-POLAR-1-M`
+(needs graph_electrostatics v0.4.0, see `run_polar.sh`). Earlier results used
+`mace-omol-0-extra-large-4M` (51.3M parameters, 19456-dim node features, r_max 6.0, 82 elements, and it
 needs per-graph `total_spin`/`total_charge` shaped `[n_graphs]`).
 
 Two traps worth not rediscovering: never exclude self-pairs by distance
