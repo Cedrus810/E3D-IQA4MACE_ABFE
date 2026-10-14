@@ -6,7 +6,7 @@
 # Total on one RTX 2080 Ti: ~2 h.  Less on an A6000.
 set -u
 cd "$(dirname "$0")"
-P=/home/ruigengji/miniforge3/envs/openmm_dev_ubio/bin/python
+P=/home/ruigengji/miniforge3/envs/openmm_dev/bin/python
 N='warning|visitor|cuequiv|detach|^  return|^  print'
 mkdir -p logs
 run () { echo "=== $1 ==="; shift; "$@" 2>&1 | grep -viE --line-buffered "$N"; }

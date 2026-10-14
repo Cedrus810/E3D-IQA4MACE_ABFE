@@ -17,7 +17,7 @@
 set -u
 cd "$(dirname "$0")"
 
-P=/home/ruigengji/miniforge3/envs/openmm_dev_ubio/bin/python
+P=/home/ruigengji/miniforge3/envs/openmm_dev/bin/python
 N='warning|visitor|cuequiv|detach|^  return|^  print|_Jd|rho\(r\)'
 MDIR=/home/ruigengji/MLP/mace
 
@@ -43,14 +43,21 @@ BATCH=${BATCH:-16}
 # size (test_scale.py). 10,000 against 50,000 dimers is ~17% of batches; the
 # labels take ~30 min once and are cached in $OUT/data/clusters_N.npy.
 CLUSTERS=${CLUSTERS:-10000}
+# Geometry for those clusters: one frame (default, S13.16) or a stack from
+# `python em_system.py frames` -> FRAMES=frames_solvent.npz. The file stem goes
+# into every cache and output name, so the two never share labels.
+FRAMES=${FRAMES:-em_solvent.npz}
+# Largest cluster in waters; 24 reaches ~1,200 cross edges, and `direct` fails
+# beyond the trained range (S13.20). Goes into every name like FRAMES.
+CLUSTER_MAX=${CLUSTER_MAX:-24}
 
 for TAG in $TAGS; do
   MODEL=$MDIR/MACE-POLAR-1-$TAG.model
   OUT=runs/polar-$TAG
   [ -f "$MODEL" ] || { echo "missing $MODEL"; exit 1; }
   mkdir -p "$OUT/logs"
-  echo "=== MACE-POLAR-1-$TAG  cfg=$CFG n=$NTR clusters=$CLUSTERS steps=$STEPS h=$HIDDEN arms=$ARMS -> $OUT ==="
-  MACE_MODEL=$MODEL E3D_OUT=$OUT E3D_BATCH=$BATCH E3D_CLUSTERS=$CLUSTERS \
+  echo "=== MACE-POLAR-1-$TAG  cfg=$CFG n=$NTR clusters=$CLUSTERS frames=$FRAMES wmax=$CLUSTER_MAX steps=$STEPS h=$HIDDEN arms=$ARMS -> $OUT ==="
+  MACE_MODEL=$MODEL E3D_OUT=$OUT E3D_BATCH=$BATCH E3D_CLUSTERS=$CLUSTERS E3D_FRAMES=$FRAMES E3D_CLUSTER_MAX=$CLUSTER_MAX \
     $P -u test_joint.py "$CFG" "$NTR" "$STEPS" "$HIDDEN" "$ARMS" 2>&1 \
     | grep -viE --line-buffered "$N" \
     | tee -a "$OUT/logs/joint.log"
