@@ -21,7 +21,7 @@ logs/*
 # Cluster scheduler output
 *.log
 *.lo
-training.o*
+*.o[0-9]*
 
 # Local training launchers
 learn*.zsh
@@ -51,3 +51,11 @@ runs/
 
 # Local reading material
 *.pdf
+
+# Internal working notes and run debris (never published)
+.commit_drafts/
+CLAUDE.md
+HANDOFF_*.md
+researchd.plan.toml
+pids.txt
+experiments/**/out/
