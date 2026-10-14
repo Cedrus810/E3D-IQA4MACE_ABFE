@@ -11,7 +11,7 @@ a D_ij, so unless L_int pins sum D_LE the ABFE layer has no foundation.
 Target: held-out MAE on sum D_AB vs E_int at chemical accuracy, ~1 kcal/mol
 (0.0434 eV). Backbone frozen (S13.2, S13.3); only the head trains.
 
-Read-only on /home/ruigengji/MLP/mace and data/; downloads nothing.
+Read-only on ~/MLP/mace and data/; downloads nothing.
 """
 
 import os
@@ -29,7 +29,8 @@ from decomp.mace_adapter import MACEDecomposition
 
 DEV = "cuda" if torch.cuda.is_available() else "cpu"
 MODEL = os.environ.get(
-    "MACE_MODEL", "/home/ruigengji/MLP/mace/mace-omol-0-extra-large-4M.model")
+    "MACE_MODEL",
+    os.path.expanduser("~/MLP/mace/mace-omol-0-extra-large-4M.model"))
 # Everything written during a run -- logs/, ckpt/ and the cached E/F targets --
 # hangs off this root, so a second backbone gets its own directory instead of
 # overwriting the first. It MUST: the E/F targets are the backbone's own energy,

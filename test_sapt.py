@@ -21,7 +21,7 @@ The third arm matters: it separates "more channels helped" from "component
 supervision helped". All are scored on the same held-out total E_int, plus a
 per-channel breakdown.
 
-Read-only on /home/ruigengji/MLP/mace and data/; downloads nothing.
+Read-only on ~/MLP/mace and data/; downloads nothing.
 """
 
 import pathlib

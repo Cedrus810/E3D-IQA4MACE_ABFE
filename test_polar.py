@@ -22,9 +22,10 @@ Environment: mace-torch 0.3.16 with graph_electrostatics **v0.4.0**. v0.4.4 (PR
 `TypeError: ... unexpected keyword argument 'force_pbc_evaluator'`. The docs'
 "0.3.16 + v0.4.4" pairing does not work.
 
-Read-only on /home/ruigengji/MLP/mace; downloads nothing.
+Read-only on ~/MLP/mace; downloads nothing.
 """
 
+import os
 import sys
 
 import numpy as np
@@ -34,7 +35,7 @@ import decomp  # noqa: F401  -- must precede e3nn, see decomp/__init__.py
 from decomp.data import mace_batch
 from decomp.mace_adapter import MACEDecomposition, mace_node_irreps
 
-MDIR = "/home/ruigengji/MLP/mace"
+MDIR = os.path.expanduser("~/MLP/mace")
 
 # A water dimer: small enough to finite-difference, polar enough that the
 # long-range term is not noise.

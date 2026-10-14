@@ -25,6 +25,7 @@ single frame, no amount of sampling will fix it.
 """
 
 import argparse
+import os
 
 import numpy as np
 import torch
@@ -78,7 +79,7 @@ def main():
     ap.add_argument("--n-solvent", type=int, default=100,
                     help="nearest whole solvent residues kept in the ML region")
     ap.add_argument("--backbone",
-                    default="/home/ruigengji/MLP/mace/MACE-OFF24_medium.model")
+                    default=os.path.expanduser("~/MLP/mace/MACE-OFF24_medium.model"))
     ap.add_argument("--ckpt", default="")
     ap.add_argument("--hidden", type=int, default=64)
     ap.add_argument("--channels", type=int, default=1)

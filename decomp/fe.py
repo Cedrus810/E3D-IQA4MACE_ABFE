@@ -1,7 +1,7 @@
 """Free-energy estimation: TI along the diagonal path, and MBAR (WP8).
 
 The pymbar compatibility wrappers and the finiteness checks are adapted from
-/home/ruigengji/ABFE_IBS/Atenolol-rank11/abfe_core.py, which has already been
+~/ABFE_IBS/Atenolol-rank11/abfe_core.py, which has already been
 through the pymbar 3.x/4.x API churn and through NaN-in-the-overlap-matrix
 debugging. Reusing them beats rediscovering both.
 

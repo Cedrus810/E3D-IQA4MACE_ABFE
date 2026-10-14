@@ -1,8 +1,9 @@
 """Attach the head to the locally stored pretrained MACE checkpoints.
 
-Read-only: loads existing files from /home/ruigengji/MLP/mace, downloads nothing.
+Read-only: loads existing files from ~/MLP/mace, downloads nothing.
 """
 
+import os
 import sys
 import torch
 
@@ -10,7 +11,7 @@ import decomp  # noqa: F401  -- compat shim, must precede e3nn
 from decomp.mace_adapter import MACEDecomposition, mace_node_irreps
 from e3nn import o3
 
-MDIR = "/home/ruigengji/MLP/mace"
+MDIR = os.path.expanduser("~/MLP/mace")
 torch.manual_seed(0)
 
 

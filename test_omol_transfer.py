@@ -7,9 +7,10 @@ Frozen `mace-omol-0-extra-large-4M`: 51.3M params, 19456-dim node features,
 total_charge). Deliberately small -- 8 structures, 600 steps, frozen only.
 Fine-tuning 51M parameters on one 2080 Ti is not the question here.
 
-Read-only on /home/ruigengji/MLP/mace; downloads nothing.
+Read-only on ~/MLP/mace; downloads nothing.
 """
 
+import os
 import time
 
 import torch
@@ -20,7 +21,7 @@ from decomp.train import train_step, trainable_parameters
 from test_negative_control import water_dimers
 
 DEV = "cuda" if torch.cuda.is_available() else "cpu"
-MODEL = "/home/ruigengji/MLP/mace/mace-omol-0-extra-large-4M.model"
+MODEL = os.path.expanduser("~/MLP/mace/mace-omol-0-extra-large-4M.model")
 N_STRUCT, STEPS, R_MAX = 8, 3000, 6.0
 
 

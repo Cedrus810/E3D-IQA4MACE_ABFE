@@ -18,7 +18,7 @@ features by construction. Students then try to find it:
 
 If frozen w_I=0.1 reaches the finetuned result, WP5 is unnecessary.
 
-Read-only on /home/ruigengji/MLP/mace; downloads nothing.
+Read-only on ~/MLP/mace; downloads nothing.
 """
 
 import torch
