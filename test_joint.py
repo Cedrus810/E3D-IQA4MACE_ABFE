@@ -38,7 +38,15 @@ from decomp.data import KCAL_PER_MOL_IN_EV, mace_batch
 from decomp.losses import cross_fragment_sum, interaction_loss, sapt_loss
 from decomp.clusters import coupling_labels, solvent_clusters
 from decomp.mace_adapter import MACEDecomposition
+from decomp.polar_es import coulomb_cross
 from test_lint import BATCH, DEV, MODEL, OUT
+
+# v3 S2.3 / D6: carry POLAR's ligand-environment Coulomb explicitly. Every
+# target that contains it has it subtracted -- E (the full E_es) and F, the
+# dimer/cluster coupling and the SAPT es channel (the L/E cross term) -- so the
+# head learns only what the explicit channel does not carry. Metrics are
+# reported with it added back, so they compare with heads trained without it.
+ES = os.environ.get("E3D_ES", "0") == "1"
 
 SAPT_N = 4
 SAPT_SCALE = None   # dataset-level mean square per channel; set in __main__      # es, ex, ind, disp
@@ -80,16 +88,32 @@ def atomic_ref(bb, node_attrs):
 
 
 def make_targets(bb, teacher, b):
-    """Backbone's own E/F (referenced), plus the teacher's node gauge."""
+    """Backbone's own E/F (referenced), plus the teacher's node gauge.
+
+    With ES, also minus POLAR's electrostatic energy and its forces, and a
+    fourth return value: the L/E Coulomb cross term per structure.
+    """
     pos = b["positions"].clone().requires_grad_(True)
     d = {**b, "positions": pos}
-    out = bb(d, compute_force=True)
     ref = atomic_ref(bb, b["node_attrs"])
     n = int(b["batch"].max()) + 1
-    E = out["energy"].detach() - torch.zeros(n, device=DEV).index_add(0, b["batch"], ref)
-    F = out["forces"].detach()
+    if ES:
+        with torch.enable_grad(), coulomb_cross(bb, b["frag_id"]) as rec:
+            out = bb(d, compute_force=False)
+            e_bb, e_es = out["energy"], out["electrostatic_energy"]
+            g_bb, = torch.autograd.grad(e_bb.sum(), pos, retain_graph=True)
+            g_es, = torch.autograd.grad(e_es.sum(), pos)
+        E = (e_bb - e_es).detach() - torch.zeros(n, device=DEV).index_add(0, b["batch"], ref)
+        F = -(g_bb - g_es).detach()
+        X = rec["cross"].detach()
+    else:
+        out = bb(d, compute_force=True)
+        E = out["energy"].detach() - torch.zeros(n, device=DEV).index_add(0, b["batch"], ref)
+        F = out["forces"].detach()
     with torch.enable_grad():
         t = teacher(d, compute_force=False)
+    if ES:
+        return E, F, t["E_intra"].detach(), X
     return E, F, t["E_intra"].detach()
 
 
@@ -134,13 +158,12 @@ def precompute(bb, teacher, data, tag="", cache_path=None):
                        charges=[int(q_l[i]) for i in j],
                        frag_ids=[frag_l[i] for i in j], device=DEV)
         b["positions"] = b["positions"].requires_grad_(True)
-        E, F, I = make_targets(bb, teacher, b)
-        out.append((j, E, F, I))
+        out.append((j, *make_targets(bb, teacher, b)))
     print(f"      precomputed {len(pos_l):,} targets in "
           f"{time.perf_counter()-t0:.0f}s{tag}", flush=True)
     if cache_path is not None:
-        torch.save([(j, E.cpu(), F.cpu(), I.cpu()) for j, E, F, I in out], cache_path)
-        out = [(j, E.to(DEV), F.to(DEV), I.to(DEV)) for j, E, F, I in out]
+        torch.save([(j, *(t.cpu() for t in ts)) for j, *ts in out], cache_path)
+        out = [(j, *(t.to(DEV) for t in ts)) for j, *ts in out]
     return out
 
 
@@ -155,7 +178,22 @@ def run(tag, w_E, w_F, w_I, w_int, w_sapt, train, test, steps, teacher,
     opt = torch.optim.Adam(model.head.parameters(), lr=lr)
     sched = torch.optim.lr_scheduler.CosineAnnealingLR(opt, steps)
     pos_l, num_l, frag_l, E_l, q_l = train[:5]
+    sapt_l, sapt_scale = train[6], SAPT_SCALE
     clu = train[7] if len(train) > 7 else None
+    if ES:
+        # Subtract the explicit L/E Coulomb from the coupling and the SAPT es
+        # channel, and renormalise on the targets the head actually sees.
+        X = np.zeros(len(E_l))
+        for j, *ts in cache:
+            X[j] = ts[3].double().cpu().numpy()
+        E_l = E_l - X
+        sapt_l = sapt_l.copy()
+        sapt_l[:, 0] = sapt_l[:, 0] - X
+        ok = np.isfinite(sapt_l).all(-1)
+        sapt_scale = (sapt_l[ok] ** 2).mean(0)
+        print(f"      explicit L/E Coulomb: |mean| {np.abs(X).mean():.4f} eV "
+              f"(dimers {np.abs(X[~clu]).mean() if clu is not None else np.abs(X).mean():.4f})",
+              flush=True)
     ms_dimer = float(np.mean(E_l[~clu] ** 2)) if clu is not None \
         else float(np.mean(E_l ** 2))
     ms_clu = float(np.mean(E_l[clu] ** 2)) if clu is not None and clu.any() else 1.0
@@ -167,13 +205,13 @@ def run(tag, w_E, w_F, w_I, w_int, w_sapt, train, test, steps, teacher,
     n_batches = len(cache)
 
     while step < steps:
-        j, E_ref, F_ref, I_ref = cache[int(rng.integers(n_batches))]
+        j, E_ref, F_ref, I_ref = cache[int(rng.integers(n_batches))][:4]
         b = mace_batch([pos_l[i] for i in j], [num_l[i] for i in j], bb,
                        charges=[int(q_l[i]) for i in j],
                        frag_ids=[frag_l[i] for i in j], device=DEV)
         b["positions"] = b["positions"].requires_grad_(True)
         Eint_ref = torch.as_tensor(E_l[j], dtype=torch.float32, device=DEV)
-        sapt_ref = torch.as_tensor(train[6][j], dtype=torch.float32, device=DEV)
+        sapt_ref = torch.as_tensor(sapt_l[j], dtype=torch.float32, device=DEV)
 
         out = model(b, compute_force=True)
         ng = int(b["batch"].max()) + 1
@@ -206,7 +244,7 @@ def run(tag, w_E, w_F, w_I, w_int, w_sapt, train, test, steps, teacher,
             # neither works.
             ls, _ = sapt_loss(out["D"], b["edge_index"], b["frag_id"],
                               b["batch"][b["edge_index"][0]], sapt_ref, ng,
-                              scale=SAPT_SCALE)
+                              scale=sapt_scale)
             loss = loss + w_sapt * ls
 
         opt.zero_grad(set_to_none=True); loss.backward(); opt.step(); sched.step()
@@ -234,13 +272,18 @@ def evaluate(model, bb, teacher, data):
                        charges=[int(q_l[i]) for i in j],
                        frag_ids=[frag_l[i] for i in j], device=DEV)
         b["positions"] = b["positions"].requires_grad_(True)
-        E_ref, F_ref, I_ref = make_targets(bb, teacher, b)
+        E_ref, F_ref, I_ref, *X = make_targets(bb, teacher, b)
         out = model(b, compute_force=True)
         ng = int(b["batch"].max()) + 1
         na = torch.bincount(b["batch"], minlength=ng).float()
         eb = b["batch"][b["edge_index"][0]]
         sc = cross_fragment_sum(out["D"], b["edge_index"], b["frag_id"], eb, ng)
         pred = sc.sum(-1) if sc.dim() > 1 else sc
+        if X:                     # explicit Coulomb: total and es channel
+            pred = pred + X[0]
+            if sc.dim() > 1:
+                sc = sc.clone()
+                sc[:, 0] = sc[:, 0] + X[0]
         if sc.dim() > 1:
             sref = torch.as_tensor(data[6][j], dtype=torch.float32, device=DEV)
             eC.append((sc - sref).abs().detach().cpu())
@@ -267,7 +310,7 @@ if __name__ == "__main__":
     want = "ABCD"
     rest = []
     for a in argv:
-        if re.fullmatch(r"[ABCDabcd]+", a):
+        if re.fullmatch(r"[ABCDNabcdn]+", a):
             want = a.upper()
         else:
             rest.append(a)
@@ -300,13 +343,25 @@ if __name__ == "__main__":
     # to grow with the system -- measured at -2.0 meV/edge, i.e. -3.1 eV of a
     # -1.5 eV coupling on a 341-atom carve. See decomp/clusters.py.
     n_clu = int(os.environ.get("E3D_CLUSTERS", 0))
+    # Geometry source for the clusters. It is in every cache and output name
+    # below: labels cut from one frame, reused under a frame stack, would train
+    # the head on the wrong clusters and nothing would complain. The default
+    # keeps the single-frame names so existing caches still resolve.
+    frames = os.environ.get("E3D_FRAMES", "em_solvent.npz")
+    ftag = "" if frames == "em_solvent.npz" else f"_{pathlib.Path(frames).stem}"
+    # Largest cluster, in waters. It bounds the cross-edge range the head is
+    # trained on, and `direct` fails beyond that range (S13.20). Named like the
+    # frame source, and the default keeps the old names.
+    wmax = int(os.environ.get("E3D_CLUSTER_MAX", 24))
+    ftag += "" if wmax == 24 else f"_w{wmax}"
     clu = np.zeros(len(train[0]), dtype=bool)
     if n_clu:
         t0 = time.perf_counter()
-        cp, cn, cf = solvent_clusters(n=n_clu, rng=np.random.default_rng(1))
+        cp, cn, cf = solvent_clusters(frames, n=n_clu, size=(2, wmax),
+                                      rng=np.random.default_rng(1))
         # ~0.19 s per label in float64 (three backbone passes each), so 10,000
         # is half an hour every restart unless it lands on disk.
-        lab = OUT / f"data/clusters_{n_clu}.npy"
+        lab = OUT / f"data/clusters_{n_clu}{ftag}.npy"
         if lab.exists():
             ce = np.load(lab)
         else:
@@ -329,7 +384,8 @@ if __name__ == "__main__":
     # The cluster count belongs in every output name: the cached E/F targets
     # and the trained head both depend on it, and reusing a dimer-only cache
     # under a cluster run is silent and wrong.
-    tag = f"_c{n_clu}" if n_clu else ""
+    tag = f"_c{n_clu}{ftag}" if n_clu else ""
+    tag += "_es" if ES else ""
     stem = f"{cfg}_n{n_tr}{tag}_h{hidden}_s{steps}"
     for d in ("ckpt", "logs", "data"):
         (OUT / d).mkdir(parents=True, exist_ok=True)
@@ -344,7 +400,10 @@ if __name__ == "__main__":
     cases = {"A  E+F        ": (1, 1, 0, 0, 0),
              "B  +L_int     ": (1, 1, 0, 1, 0),
              "C  +L_IQA+int ": (1, 1, 0.1, 1, 0),
-             "D  +SAPT      ": (1, 1, 0.1, 1, 1)}
+             "D  +SAPT      ": (1, 1, 0.1, 1, 1),
+             # v3 S5.3 / D7: D without the synthetic-teacher L_IQA. Under the
+             # anchored Hamiltonian the node gauge enters no free energy.
+             "N  D-L_IQA    ": (1, 1, 0, 1, 1)}
     for tag, w in cases.items():
         if tag.strip()[0] not in want:
             continue
