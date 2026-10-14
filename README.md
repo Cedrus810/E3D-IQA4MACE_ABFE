@@ -1,5 +1,7 @@
 # E3D-IQA4MACE · ABFE
 
+English | [中文](README_zh.md) | [日本語](README_ja.md)
+
 **Atom-resolved binding free energies from a physically gauged equivariant
 potential — one calculation, every atom accounted for.**
 
