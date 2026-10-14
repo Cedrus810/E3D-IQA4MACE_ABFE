@@ -103,3 +103,91 @@ def isolated_energy(model, data, frag_id, which, ligand=0):
     E_intra, D = model.head(h, sub["positions"], sub_ei)
     D = D.sum(-1) if D.dim() > 1 else D
     return E_intra.sum() + 0.5 * D.sum()
+
+
+# ---------------------------------------------------------------- anchored (v3 S3)
+
+def _fragment(data, frag_id, which, charge):
+    """One fragment of a single-graph batch as its own MACE input dict."""
+    sel = (frag_id == which)
+    idx = sel.nonzero().squeeze(-1)
+    remap = torch.full_like(frag_id, -1)
+    remap[idx] = torch.arange(len(idx), device=frag_id.device)
+    ei = data["edge_index"]
+    keep = sel[ei[0]] & sel[ei[1]]
+    sub = {k: v for k, v in data.items() if k not in
+           ("positions", "node_attrs", "edge_index", "shifts", "unit_shifts",
+            "batch", "ptr", "frag_id", "total_charge")}
+    sub.update({
+        "positions": data["positions"][idx],
+        "node_attrs": data["node_attrs"][idx],
+        "edge_index": remap[ei[:, keep]],
+        "shifts": data["shifts"][keep],
+        "unit_shifts": data["unit_shifts"][keep],
+        "batch": torch.zeros(len(idx), dtype=torch.long, device=idx.device),
+        "ptr": torch.tensor([0, len(idx)], device=idx.device),
+        "total_charge": torch.tensor([int(charge)], dtype=torch.long,
+                                     device=idx.device),
+    })
+    return sub
+
+
+def anchored_energy(model, data, lam, frag_id, ligand=0, es=False, cut=None,
+                    charges=(0, 0)):
+    """The anchored Hamiltonian of RESEARCH_PLAN_v3.md S3, one graph.
+
+        U(R, lambda) = E_bb(R) - sum_{i in L} (1 - lambda_i) c_i(R)        lambda > 0, full graph
+        c_i          = sum_{a in E} D_ia  (+ E_es,i^LE with es=True, S2.3)
+        U(R, 0)      = E_bb(R_L) + E_bb(R_E)
+
+    The total comes from the backbone, so both endpoints are exact whatever
+    the head; the head only decides how much of the coupling is attributed.
+    `cut` = s in [0, 1] gives the cut segment at lambda = 0+,
+    U_s = (1 - s) U(0+) + s U(0) (S3: the remainder spread is 3-13 kT, S13.25,
+    so this segment needs windows). cut=None is the continuous segment.
+
+    dU/dlambda_i = c_i exactly: D does not depend on lambda. Forces with
+    es=True are exact for uniform lambda over the ligand (the diagonal path):
+    the per-atom Coulomb split carries no position gradient, the cross term
+    times (1 - mean lambda) carries all of it, with zero value.
+
+    charges = (ligand, environment) total charges for the fragments at
+    lambda = 0. Returns (U [1], c [n_nodes], parts dict).
+    """
+    import contextlib
+    from .polar_es import coulomb_cross
+
+    if int(data["batch"].max()) != 0:
+        raise ValueError("anchored_energy takes one graph")
+    bb = model.backbone
+    in_L = frag_id == ligand
+    ctx = (coulomb_cross(bb, frag_id, ligand, per_atom=True) if es
+           else contextlib.nullcontext({}))
+    with ctx as rec:
+        out = bb(data, training=False, compute_force=False)
+    E_bb = out["energy"].sum()
+    _, D = model.head(out["node_feats"], data["positions"], data["edge_index"])
+    D = D.sum(-1) if D.dim() > 1 else D
+
+    src, dst = data["edge_index"]
+    cross = in_L[src] != in_L[dst]
+    lig_end = torch.where(in_L[src], src, dst)
+    # each unordered pair appears twice in the edge list: half to its ligand atom each time
+    c = torch.zeros(len(frag_id), dtype=D.dtype, device=D.device).index_add(
+        0, lig_end[cross], 0.5 * D[cross])
+    es_grad = torch.zeros((), dtype=D.dtype, device=D.device)
+    if es:
+        c = c + torch.where(in_L, rec["per_atom"].to(D.dtype), torch.zeros_like(c))
+        x = rec["cross"].sum()
+        es_grad = (1 - lam[in_L].mean().detach()) * (x - x.detach())
+    w = torch.where(in_L, 1 - lam, torch.zeros_like(lam))
+    U_plus = E_bb - (w * c).sum() - es_grad
+    parts = {"E_bb": E_bb, "sum_c": (c * in_L).sum()}
+    if cut is None:
+        return U_plus.reshape(1), c, parts
+
+    U0 = sum(bb(_fragment(data, frag_id, k, q), training=False,
+                compute_force=False)["energy"].sum()
+             for k, q in ((ligand, charges[0]), (1 - ligand, charges[1])))
+    parts.update({"U_plus": U_plus, "U0": U0})
+    return ((1 - cut) * U_plus + cut * U0).reshape(1), c, parts

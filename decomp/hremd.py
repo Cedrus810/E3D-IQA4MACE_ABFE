@@ -12,6 +12,7 @@ configurations move between them.
 import numpy as np
 
 KB_KJ = 0.008314462618      # kJ/mol/K
+EV_TO_KJ = 96.48533212      # the forces work in eV; TI is reported in kJ/mol like MBAR
 
 
 class TorchReplica:
@@ -35,17 +36,7 @@ class TorchReplica:
         pos = torch.tensor(np.asarray(positions_nm) * 10.0,
                            dtype=torch.float32, device=device)
 
-        def energy(p):
-            """eV, differentiable in p (Angstrom)."""
-            from .lambda_mask import alchemical_energy
-            data = force._graph(p.detach().cpu().numpy())
-            data["positions"] = p
-            U, _, _ = alchemical_energy(force.model, data, force.lam,
-                                        force.frag_id, mode=force.mode,
-                                        ligand=force.ligand)
-            return U.sum()
-
-        self.dyn = Langevin(energy, pos, masses(numbers, pos.device),
+        self.dyn = Langevin(force.torch_energy, pos, masses(numbers, pos.device),
                             T=T, dt=dt_fs, gamma=friction, seed=seed)
 
     def step(self, n):
@@ -137,7 +128,7 @@ class HREMD:
         """u = U/kT of configuration pos under window k_state's Hamiltonian."""
         f = self.forces[k_state]
         U, _ = f.energy_and_forces(np.asarray(pos_nm) * 10.0)
-        return U * 96.48533212 / self.kT
+        return U * EV_TO_KJ / self.kT
 
     def _record(self):
         """One row of u_kn (all states x this configuration) plus dU/dlambda."""
@@ -146,9 +137,13 @@ class HREMD:
             self.u_kn.append([self._reduced(j, pos) for j in range(self.n)])
             f = self.forces[k]
             f.energy_and_forces(np.asarray(pos) * 10.0, need_dudl=True)
-            g = f.last_dudl
+            # eV -> kJ/mol: TI used to come out in eV while MBAR, from
+            # u_kn = U/kT with kT in kJ/mol, came out in kJ/mol.
+            g = f.last_dudl * EV_TO_KJ
             self.dudl_atom.append(g.copy())
-            self.dudl.append(float(g.sum()))
+            # AnchoredForce: on the cut segment dU/dp is global, not a sum over atoms
+            tot = getattr(f, "last_dudl_total", None)
+            self.dudl.append(float(g.sum()) if tot is None else tot * EV_TO_KJ)
 
     def _exchange(self, rng):
         """Neighbour swaps, alternating even/odd pairs."""
@@ -196,6 +191,7 @@ class HREMD:
             "dudl": d,
             "dG_TI": dG_ti,
             "dG_TI_per_atom": ti_per_atom(self.lambdas, da),
+            "dudl_per_atom": da,
             "acceptance": self.n_accept / np.maximum(self.n_attempt, 1),
             "n_frames": n_frames,
         }

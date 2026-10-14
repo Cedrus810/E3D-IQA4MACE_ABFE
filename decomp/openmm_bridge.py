@@ -102,12 +102,85 @@ class AlchemicalForce:
             self.n_dudl_calls += 1
         return float(U.sum()), F.cpu().numpy()
 
+    def torch_energy(self, p):
+        """U in eV, differentiable in p (Angstrom torch tensor) -- what
+        hremd.TorchReplica integrates."""
+        from .lambda_mask import alchemical_energy
+        data = self._graph(p.detach().cpu().numpy())
+        data["positions"] = p.to(self.device)       # TorchReplica keeps p on the CPU
+        U, _, _ = alchemical_energy(self.model, data, self.lam, self.frag_id,
+                                    mode=self.mode, ligand=self.ligand)
+        return U.sum()
+
     def __call__(self, state):
         """OpenMM PythonForce entry point."""
         pos = state.getPositions(asNumpy=True).value_in_unit_system(
             __import__("openmm").unit.md_unit_system) * NM_TO_ANG
         U, F = self.energy_and_forces(np.asarray(pos, dtype=np.float64))
         return U * EV_TO_KJ_PER_MOL, F * EV_TO_KJ_PER_MOL / NM_TO_ANG
+
+
+class AnchoredForce(AlchemicalForce):
+    """The anchored Hamiltonian (RESEARCH_PLAN_v3.md S3) as an OpenMM / HREMD force.
+
+    One path coordinate p in [0, 2] runs both segments, so a single replica
+    ladder carries the whole decoupling:
+
+        p in [0, 1]   lambda = 1 - p on every ligand atom (diagonal path), full graph
+        p in [1, 2]   cut segment, s = p - 1: U_s = (1 - s) U(0+) + s U(0)
+
+    `set_lambda` takes p, so hremd.HREMD needs no change of interface: pass the
+    p ladder as its `lambdas`. TI over p then gives dG_decouple directly, and
+    `last_dudl` holds dU/dp per atom -- minus c_i on the continuous segment
+    (the per-atom attribution), zero on the cut segment, whose dU/dp
+    (U(0) - U(0+), not attributable) is in `last_dudl_total`.
+    """
+
+    def __init__(self, model, numbers, frag_id, es=False, charge=0,
+                 ligand_charge=0, multiplicity=1, ligand=0, device=None):
+        super().__init__(model, numbers, frag_id, mode="anchored", charge=charge,
+                         multiplicity=multiplicity, ligand=ligand, device=device)
+        self.es = es
+        self.charges = (ligand_charge, charge - ligand_charge)
+        self.set_lambda(0.0)
+
+    def set_lambda(self, value):
+        p = float(value)
+        if not 0.0 <= p <= 2.0:
+            raise ValueError(f"path coordinate {p} outside [0, 2]")
+        self.p = p
+        self.cut = None if p <= 1.0 else p - 1.0
+        lam = 1.0 - p if p <= 1.0 else 0.0
+        self.lam = torch.full_like(self.lam, lam)
+
+    def _U(self, data, lam):
+        from .lambda_mask import anchored_energy
+        return anchored_energy(self.model, data, lam, self.frag_id,
+                               ligand=self.ligand, es=self.es, cut=self.cut,
+                               charges=self.charges)
+
+    def torch_energy(self, p):
+        data = self._graph(p.detach().cpu().numpy())
+        data["positions"] = p.to(self.device)       # TorchReplica keeps p on the CPU
+        return self._U(data, self.lam)[0].sum()
+
+    def energy_and_forces(self, positions_ang, need_dudl=False):
+        data = self._graph(positions_ang)
+        lam = self.lam.clone().requires_grad_(need_dudl and self.cut is None)
+        U, c, parts = self._U(data, lam)
+        outs = [data["positions"]] + ([lam] if lam.requires_grad else [])
+        grads = torch.autograd.grad(U.sum(), outs)
+        F = -grads[0].detach()
+        if need_dudl:
+            if self.cut is None:            # dU/dp = -dU/dlambda_i, lambda = 1 - p
+                g = -grads[1].detach()
+                self.last_dudl_total = float(g.sum())
+            else:                           # dU/ds = U(0) - U(0+), global
+                g = torch.zeros_like(self.lam)
+                self.last_dudl_total = float(parts["U0"] - parts["U_plus"])
+            self.last_dudl = g.cpu().numpy()
+            self.n_dudl_calls += 1
+        return float(U.sum()), F.cpu().numpy()
 
 
 def from_abfe_output(out_dir, leg="solvent", ligand_resname="MOL"):
