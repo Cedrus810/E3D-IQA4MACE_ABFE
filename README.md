@@ -30,8 +30,9 @@ atom-removal order — it is the Shapley value, for the cost of one ordinary ABF
 | plain `Σᵢ Eᵢ` MLIP | no | yes | yes |
 | **this work** | **yes** | **yes** | **yes** |
 
-Full design, measurements and go/no-go criteria: **[RESEARCH_PLAN_v2.md](RESEARCH_PLAN_v2.md)**
-(v1 is preserved as [PROJECT_PLAN_v1.md](PROJECT_PLAN_v1.md)).
+Full design, measurements and go/no-go criteria: **[RESEARCH_PLAN_v3.md](RESEARCH_PLAN_v3.md)**
+(since 2026-10-10; [RESEARCH_PLAN_v2.md](RESEARCH_PLAN_v2.md) S13 is the frozen
+measurement record before it, and v1 is preserved as [PROJECT_PLAN_v1.md](PROJECT_PLAN_v1.md)).
 Where things stand right now, and what is half-done: **[STATUS.md](STATUS.md)**.
 
 ## Status — work in progress
@@ -74,12 +75,21 @@ descending at 32k steps. Checkpoint in `ckpt/`, numbers in `logs/joint_*.json`.
 **Condensed phase** (Atenolol + up to 100 waters, backbone now
 `MACE-POLAR-1-M`): dimer-trained heads carry a per-edge bias of -2.0 meV per
 cross edge that grows with the system; clusters labelled by the frozen backbone
-itself cut it 7× out of sample. The coupling still fails to extrapolate past the
-training cluster size, on both POLAR-1-M and -L, because every cluster comes from
-one frame; clusters from many MD frames are next (`RESEARCH_PLAN_v2.md`
-§13.15–13.19).
+itself cut it 7× out of sample, and drawing them from 20 MD frames brings the
+held-out pair sum to within 0.35 eV. The head's total coupling fails beyond the
+cross-edge count the clusters cover; larger clusters fix that tail but move the
+error elsewhere (`RESEARCH_PLAN_v2.md` §13.15–13.23).
 
-**Not yet done:** a free-energy calculation with real sampling (WP8/WP9), and
+**Anchored total** (v3, decided 2026-10-10): the total now comes from the
+frozen backbone, `U = E_bb − Σᵢ(1−λᵢ)cᵢ`, and the head only splits it; what the
+head misses is one reported cut term, so `Σᵢ dGᵢ + dG_cut = dG` exactly. The
+identities hold to float64 in code (v3 §13.29). The cut term's spread is
+6–10 kT at n = 20–50, so the cut takes a few windows (§13.25, §13.37). The
+head is retrained on unminimised MD frames pooled over alchemical states,
+because it fits the ensemble its clusters come from (§13.33–13.37).
+
+**Not yet done:** the MM wall and ML/MM system the anchored sampling needs, a
+free-energy calculation with real sampling (WP8/WP9), and
 real IQA labels — every node-gauge result to date uses a synthetic teacher, so
 they show that *a* gauge can be imposed on frozen features, not that the *IQA*
 gauge lives there.
@@ -90,7 +100,8 @@ gauge lives there.
 decomp/                 the package
   head.py               backbone-agnostic decomposition head (E_intra per node, D_ij per edge)
   mace_adapter.py       attach the head to a frozen MACE backbone (WP4)
-  lambda_mask.py        atom-wise alchemical coupling — "edge" vs "graph" modes (S5)
+  lambda_mask.py        atom-wise alchemical coupling — "edge" / "graph" / "anchored" (v3 S3)
+  polar_es.py           explicit ligand–environment Coulomb channel from MACE-POLAR-1 (v3 S2.3)
   losses.py             mixed supervision: E, F, IQA gauge, L_int, SAPT (S4.3)
   train.py              training step for the defining experiment
   data.py               DES370K dimer batches
@@ -100,22 +111,25 @@ decomp/                 the package
   hremd.py              replica exchange over lambda
   clusters.py           solvent clusters labelled by the frozen backbone
 
-test_*.py               one experiment per file (see RESEARCH_PLAN_v2.md §13)
+test_*.py               one experiment per file (see RESEARCH_PLAN_v2.md §13, v3 §13)
+test_anchored.py        exact checks of the anchored Hamiltonian
                         endpoints / attribution / openmm run in seconds, no data
 test_scale.py           head coupling vs backbone truth, n_solvent = 5..100
 run_polar.sh            MACE-POLAR-1 training (one output directory per backbone)
 em_system.py            MM-minimise a prepared ABFE leg
 prepare_data.py         one-time DES370K → train/val/test splits (by system, not by row)
 run_queue.sh            cluster queue for the experiment sequence
-RESEARCH_PLAN_v2.md     design + measurements (the real documentation)
+RESEARCH_PLAN_v3.md     current design + measurements from §13.24 (the real documentation)
+RESEARCH_PLAN_v2.md     earlier design; §13.1–13.23 frozen measurement record
+experiments/            dated experiment directories (scripts, logs, results)
 PROJECT_PLAN_v1.md      v1 framing, superseded
 ```
 
 ## Reproduce
 
 Environment: `e3nn`, `torch`, `mace-torch`, `pymbar`, `openmm`.
-(dev env: miniforge, e3nn 0.4.4 -- downgraded for MACE-POLAR-1 -- / torch 2.12.1 /
-mace-torch 0.3.16; full list in STATUS.md)
+(dev env: miniforge `openmm_dev`, e3nn 0.4.4 -- downgraded for MACE-POLAR-1 -- /
+torch 2.12.0 / mace-torch 0.3.16; full list in STATUS.md)
 
 ```bash
 # 1. Download DES370K from DESRES (https://www.deshawresearch.com/downloads/)
