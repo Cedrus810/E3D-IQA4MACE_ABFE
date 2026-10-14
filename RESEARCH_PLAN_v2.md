@@ -1315,6 +1315,10 @@ that one box, not physics. The remaining error sits in the E_intra response to
 cutting the graph, which is supervised only through clusters drawn from a
 single geometry.
 
+*Corrected by S13.20: not memorisation. `direct` fails by cross-edge count,
+beyond the <= 1,222 the clusters cover; the training carve has 1,524 edges at
+n=100, md50's has 2,684. One frame did cost sumD 0.4-0.8 eV held out.*
+
 **Next:** clusters from 10-20 MM MD frames, each MM-minimised (the `ponytail:`
 in `clusters.py`), and larger clusters so n=50/100 are interpolation; retrain M,
 rescan on a frame outside training. POLAR-1-L was run first anyway
@@ -1351,7 +1355,8 @@ carve does not fit 11 GiB even for inference -- the n >= 50 rows ran on CPU.
 **The failure is shared, so it is not the backbone.** Both under-bind the
 held-out frame by 0.4-1 eV in sumD and both drift in `direct` beyond 24 waters.
 The one input they have in common is clusters drawn from one frame. POLAR-1-M
-stays the backbone.
+stays the backbone. *(S13.20: true for sumD; for `direct` the shared input
+that matters is the cross-edge range of the clusters.)*
 
 Caveats. Batch 8 vs 16 is not a matched comparison, but a batch effect would
 not reproduce the same failure pattern on both. *The L truth at 1524 edges
@@ -1370,13 +1375,14 @@ Scale caveats: MACE-OFF24, water dimers, 32 structures, one element pair.
 Nothing here has touched OMol25, real IQA labels, or any molecule larger than
 six atoms.
 
-### 13.19 Next: clusters from many frames
+### 13.19 Plan: clusters from many frames (run: S13.20)
 
 The question: does `direct` extrapolate once clusters come from many
 geometries instead of one? S13.16/13.17 say one frame is memorised; nothing yet
 says many frames are enough. Backbone: POLAR-1-M only.
 
-**1. Frames** (CPU, OpenMM, no GPU). A new MM trajectory of the solvent leg from
+**1. Frames** (`python em_system.py frames`, OpenMM on the GPU -- on CPU
+the 4,076-atom box runs ~35 s per ps, 17 h for the 2 ns). A new MM trajectory of the solvent leg from
 `em_solvent.npz` with a fresh velocity seed: discard 100 ps, then one frame
 every 50 ps to 1,050 ps -- 20 frames, each MM-minimised as in `em_system.py`.
 One more frame at 2 ns, never used in training, is a second test frame far from
@@ -1388,12 +1394,12 @@ plus `md2000_solvent.npz`. `md50_solvent.npz` stays held out.
 per cluster. Same count (10,000), same sizes (2-24 waters) -- change one thing
 at a time, so a result says whether frame diversity alone is the fix.
 
-**3. Cache keys -- must change before any run.** `clusters_{n}.npy` and the
-`_c{n}` target tag in `test_joint.py` key only on the cluster count, so a
-multi-frame run would silently reuse the single-frame labels. The frame source
-goes into both names.
+**3. Cache keys.** `clusters_{n}.npy` and the `_c{n}` target tag in
+`test_joint.py` keyed only on the cluster count, so a multi-frame run would have
+silently reused the single-frame labels. Both now carry the frame file's stem
+(`E3D_FRAMES` / `FRAMES=`); the default single frame keeps the old names.
 
-**4. Train.** `TAGS=M ./run_polar.sh`: arm D, 60k steps, batch 16. About 0.5 h
+**4. Train.** `FRAMES=frames_solvent.npz TAGS=M ./run_polar.sh`: arm D, 60k steps, batch 16. About 0.5 h
 labels, 1 h target precompute, 2.6 h training on the 11 GiB card. Confirm the
 loss plateau before comparing (the recurring lesson of S13).
 
@@ -1419,6 +1425,159 @@ and on `em_solvent.npz` for regression; DES370K from the run log.
 
 Still open from before, unchanged: charged pairs (`full`, 3,691 systems); real
 IQA labels to redo S13.2/S13.3 (blocked on AIMAll); arm D rerun past 32k steps.
+
+### 13.20 Many frames fix sumD; `direct` fails on cross-edge count
+
+S13.19 as planned, on an RTX 5090 (`run_multiframe.sh`, 2026-09-28): 20 frames
+in 96 s, labels 5 min, targets 8 min, 60k steps in 1.6 h; loss flat at ~0.027
+over the last 10k. `runs/multiframe.log`, `runs/polar-M/logs/scale_frames_*.log`.
+
+    pass criteria (both held-out frames)        single frame   20 frames
+      |sumD fit| <= 0.1 meV/edge                   +0.34         +0.07 / +0.015   pass
+      |direct - truth| <= 0.2 eV, n = 50 / 100     +0.36 / +2.07 +0.54 / +2.18    fail
+                                     (md2000)          --        +0.36 / +1.86    fail
+      DES370K E_int <= 0.45 kcal/mol               0.428         0.429            pass
+
+Error against truth, eV (em_solvent is now outside training too -- the frames
+start 100 ps after it):
+
+    frame    n   edges   truth    sumD-tru  direct-tru   direct-sumD
+    md50     5    307   -0.889    +0.04     -0.20        -0.24
+            10    547   -1.127    -0.17     -0.31        -0.13
+            20    975   -1.656    -0.35     -0.25        +0.10
+            50   2127   -2.418    -0.06     +0.54        +0.60
+           100   2684   -2.844    +0.56     +2.18        +1.62
+    md2000   5    253   -0.998    -0.19     -0.20        -0.01
+            10    551   -1.664    -0.14     -0.52        -0.38
+            20    966   -1.775    -0.14     -0.21        -0.08
+            50   2042   -2.768    -0.15     +0.36        +0.51
+           100   2621   -3.111    +0.29     +1.86        +1.58
+    em       5    229   -0.574    -0.23     -0.18        +0.06
+            10    423   -0.887    -0.23     -0.20        +0.02
+            20    719   -1.104    -0.45     -0.26        +0.20
+            50   1228   -1.615    -0.31     -0.18        +0.13
+           100   1524   -1.570    -0.24     -0.02        +0.22
+
+**sumD: fixed by diversity.** Held out it was 0.4-0.8 eV under-bound at every
+size with one frame; now within 0.35 eV through n=50 on both frames, and the
+per-edge fit is 5-20x smaller. DES370K unchanged (E 2.87 meV/atom, F 32.3
+meV/A, per-channel SAPT identical to 0.2 meV). em's own sumD got worse (-0.14
+-> -0.27 meV/edge): it was a training frame before and is not now.
+
+**`direct`: a function of cross-edge count, not of the frame.** Sorted by
+edges, all three frames fall on one curve: -0.2 eV through 1,524 edges, then
++0.36 / +0.54 at ~2,100 and +1.9 / +2.2 at ~2,650. The training clusters reach
+at most 1,222 cross edges (ligand clusters: median 638, p95 1,106; r_max 6 A).
+em at n=100 has 1,524 because its ligand is compact; in the MD frames the
+ligand opens up and the same 100 waters make 2,600. So S13.16's "memorised
+box" was wrong: the single-frame head was right on em at n=100 because that
+carve sits near the edge-count range it was trained on.
+
+The cut term `direct - sumD` carries the failure: within +-0.4 eV inside the
+range, +0.5 to +1.6 eV beyond it. It is the E_intra response to the graph cut,
+and it is only supervised at the edge counts the clusters span.
+
+Also visible: a size-independent `direct` offset of about -0.2 eV inside the
+range on every frame. Small next to the extrapolation failure; watch it.
+
+### 13.21 Plan: clusters that span the edge count (run: S13.22)
+
+Change one thing: `size` from 2-24 to 2-120 waters (`CLUSTER_MAX=120`), same
+20 frames, same 10,000 clusters, same recipe. Ligand + 100 waters in an MD
+frame has ~2,650 cross edges, so 120 puts every test size inside the range.
+Pass criteria as S13.19. Needs the 32 GiB card: a 120-water cluster is ~400
+atoms, and one in a batch of 16 costs more than the rest of the batch.
+
+If `direct` then passes at n=50/100, the edge-count diagnosis holds and WP9
+carves must stay within the trained edge range -- a stated domain of validity,
+not a bug. If it still fails, the E_intra response to the cut does not learn
+from more edges, and the two-stage protocol (S13.14) is the route.
+
+### 13.22 Clusters to 120 waters: the tail is fixed, the error moves
+
+S13.21 as planned (`CLUSTER_MAX=120`, RTX 5090, 2026-09-28): load 467 s, labels
+1,086 s (coupling -25.6 .. +0.1 eV, |mean| 6.3 vs 1.3), targets 977 s, 60k steps
+in 2.1 h, loss flat at ~0.023. `runs/multiframe_w120.log`,
+`runs/polar-M/logs/scale_frames_w120_*.log`. Ligand clusters now reach 2,848
+cross edges (median 2,157), covering every test carve.
+
+    pass criteria                               <=24 waters      <=120 waters
+      |direct - truth|, n=50/100, md50            +0.54 / +2.18    -0.15 / +0.14   pass
+                                  md2000          +0.36 / +1.86    -0.30 / -0.29   just fails
+      sumD fit, meV/edge, md50 / md2000           +0.07 / +0.015   -0.15 / -0.18   fail
+      DES370K E_int kcal/mol                       0.429            0.514          fail
+
+    frame    n  edges   sumD-tru  direct-tru  direct-sumD     (<=120 waters)
+    md50     5    307    +0.33     -0.15       -0.47
+            10    547    +0.07     -0.35       -0.42
+            20    975    -0.13     -0.41       -0.29
+            50   2127    -0.32     -0.15       +0.17
+           100   2684    -0.47     +0.14       +0.61
+    md2000   5    253    +0.05     -0.23       -0.28
+            10    551    +0.40     -0.53       -0.93
+            20    966    +0.23     -0.41       -0.64
+            50   2042    -0.29     -0.30       -0.00
+           100   2621    -0.79     -0.29       +0.50
+    em       5    229    -0.06     -0.16       -0.09
+            10    423    -0.01     -0.24       -0.24
+            20    719    -0.27     -0.33       -0.06
+            50   1228    -0.35     -0.32       +0.03
+           100   1524    -0.46     -0.48       -0.02
+
+**The edge-count diagnosis holds.** Once clusters span the test edge counts the
++2 eV tail is gone: `direct` is within 0.3 eV at n=50/100 on both held-out
+frames. Its error no longer grows with size.
+
+**But the error moved rather than shrank.** `direct` is now ~-0.3 eV at every
+size, including n=10-20 where the <=24 head was at -0.2 (on em it was -0.02 at
+n=100, now -0.48); only ~19% of clusters are <= 24 waters now. sumD turns from
+under- to over-binding at large n (-0.79 eV at md2000 n=100). DES370K pays: E
+2.87 -> 3.84 meV/atom, F 32.3 -> 38.8 meV/A, every SAPT channel ~15% worse --
+the 200-atom clusters dominate L_E and L_F.
+
+Two recipes, two different trade-offs, no recipe that wins everywhere: the
+cluster data is not the bottleneck, and more or different data will keep moving
+the error around. The budget says why. A 1 kcal/mol (0.043 eV) coupling on a
+341-atom carve asks the head's total to be consistent between the whole and its
+parts to ~0.1 meV/atom; its own fit is 3-4 meV/atom.
+
+### 13.23 Proposal (pending decision): anchor the total to the backbone
+
+Stop asking the head to reproduce a total the backbone already gives exactly:
+
+    U(R, lambda) = E_bb(R) - sum_{i in L, a in E} (1 - lambda_i) D_ia    lambda > 0, full graph
+    U(R, 0)      = E_bb(L) + E_bb(E)                                     fragments alone
+
+Both endpoints are exact by construction, so the total dG is the backbone's own
+ABFE whatever the head's quality (state function). The head only decides the
+split: sum D_ia is integrated by TI along the diagonal path and gives the
+per-atom values; the remainder `truth - sumD` goes into the one graph-cut step
+at lambda = 0, by BAR -- S13.14's two-stage protocol, now with an exact total.
+Cost: E_bb comes from the same backbone pass as the node features, and the
+lambda = 0 fragments are what `isolated_energy` already computes. POLAR's
+long-range term (9.9% of the coupling, S13.15) lands in the cut step unless
+the pairs carry it.
+
+The figure of merit becomes the unattributed remainder |sumD - truth|, and the
+existing scans already measure it:
+
+    head             n <= 50            n = 100 (share of |truth|)       DES370K E_int
+    20 frames, <=24  <= 0.35 held out   md50 0.56 (20%), md2000 0.29 (9%)   0.429
+                     (em <= 0.45)       em 0.24 (15%)
+    20 frames, <=120 <= 0.40 held out   md50 0.47 (17%), md2000 0.79 (26%)  0.514
+                     (em <= 0.35)       em 0.46 (31%)
+
+On that measure the <=24-water multi-frame head is the better one, and it keeps
+DES370K. Under the proposal, cluster-recipe tuning stops.
+
+Risk: a mean remainder of 0.3-0.5 eV (7-12 kcal/mol) in one BAR step may not
+overlap; what decides it is the remainder's fluctuation over configurations,
+not its mean. If it does not, add intermediate windows on the cut segment.
+Only sampling will tell.
+
+If adopted: (1) an `anchored` mode in `lambda_mask.py` plus an exact-endpoint
+check; (2) fix the head at 20 frames, <=24 waters; (3) Stage A -- total dG,
+per-atom values and cut-step overlap with real sampling on a small system.
 
 Two implementation traps, both found the expensive way:
 

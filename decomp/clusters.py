@@ -19,9 +19,11 @@ with no QM. Clusters of 2-25 residues span the edge counts the dimers miss.
 The CCSD(T) and SAPT anchors stay on the dimers -- those are real data, and a
 backbone label only teaches the head to reproduce its own backbone.
 
-ponytail: one minimised frame is the only geometry source here, so diversity
-comes from which residues are kept and how they are split. Add frames from an
-MD trajectory if the head starts memorising this box.
+Geometry comes from one minimised frame or a stack of MM MD frames
+(`python em_system.py frames`); with a stack, each cluster draws its frame at
+random. One frame leaves the held-out pair sum 0.4-0.8 eV off; 20 frames fix
+it (S13.20). `size` bounds the cross-edge range the head is trained on, and
+`direct` fails beyond it: 2-24 waters reach 1,222 cross edges (S13.20).
 """
 
 import numpy as np
@@ -69,11 +71,15 @@ def solvent_clusters(path="em_solvent.npz", n=2000, rng=None, size=(2, 24),
     the rest are solvent-only with a random split, which is where most of the
     cross-edge counts come from and costs nothing to generate.
 
+    `path` holds one frame (positions [n_atoms, 3]) or a stack
+    ([n_frames, n_atoms, 3], same atoms and box in every frame).
+
     Returns (positions, numbers, frag_ids) lists, ready for `mace_batch`.
     """
     rng = np.random.default_rng(0) if rng is None else rng
     z = np.load(path, allow_pickle=True)
-    pos_all = np.asarray(z["positions"])
+    stack = np.asarray(z["positions"])
+    stack = stack[None] if stack.ndim == 2 else stack
     num_all = np.asarray(z["numbers"])
     resids = np.asarray(z["resids"])
     resnames = np.asarray(z["resnames"])
@@ -83,26 +89,34 @@ def solvent_clusters(path="em_solvent.npz", n=2000, rng=None, size=(2, 24),
     is_lig = np.array([bool((resnames[g] == ligand_resname).all()) for g in groups])
     lig_seeds = np.where(is_lig)[0]
     wat_seeds = np.where(~is_lig)[0]
-    centroids = np.array([pos_all[g].mean(0) for g in groups])
+    centroids = [np.array([p[g].mean(0) for g in groups]) for p in stack]
 
-    # Closest-atom distances from each ligand, computed once: the ligand is a
-    # fixed 41-atom residue and thousands of clusters reuse the same ranking.
-    exact = {}
-    for s in lig_seeds:
-        sh = (-np.round((centroids - centroids[s]) / box) * box
-              if box is not None else np.zeros_like(centroids))
-        exact[int(s)] = np.array([
-            np.linalg.norm(pos_all[g] + sh[k] - pos_all[groups[s]][:, None],
-                           axis=-1).min()
-            for k, g in enumerate(groups)])
+    # Closest-atom distances from each ligand, computed once per frame: the
+    # ligand is a fixed 41-atom residue and thousands of clusters reuse the
+    # same ranking.
+    exact = []
+    for p, c in zip(stack, centroids):
+        ex = {}
+        for s in lig_seeds:
+            sh = (-np.round((c - c[s]) / box) * box
+                  if box is not None else np.zeros_like(c))
+            ex[int(s)] = np.array([
+                np.linalg.norm(p[g] + sh[k] - p[groups[s]][:, None],
+                               axis=-1).min()
+                for k, g in enumerate(groups)])
+        exact.append(ex)
 
     out_pos, out_num, out_frag = [], [], []
     for _ in range(n):
+        # one frame draws nothing, so single-frame runs reproduce their
+        # cached labels exactly
+        f = int(rng.integers(len(stack))) if len(stack) > 1 else 0
+        pos_all = stack[f]
         want_lig = lig_seeds.size and rng.random() < ligand_frac
         seed = int(rng.choice(lig_seeds if want_lig else wat_seeds))
         n_keep = int(rng.integers(size[0], size[1] + 1))
-        order, shifts = _carve(centroids, seed, n_keep, box,
-                               exact=exact.get(seed))
+        order, shifts = _carve(centroids[f], seed, n_keep, box,
+                               exact=exact[f].get(seed))
 
         parts = [pos_all[groups[k]] + shifts[k] for k in order]
         sizes = [len(groups[k]) for k in order]
@@ -157,3 +171,24 @@ def coupling_labels(bb, positions, numbers, frags, device="cuda", batch=8):
     finally:
         bb.to(was)
     return (whole - a - b_).cpu().numpy()
+
+
+if __name__ == "__main__":
+    # python -m decomp.clusters  --  a two-frame stack whose second frame is the
+    # first moved 1000 A along z: every cluster must come whole from one frame,
+    # and both frames must be drawn.
+    import pathlib
+    import tempfile
+    z = np.load("em_solvent.npz", allow_pickle=True)
+    one = solvent_clusters("em_solvent.npz", n=200)
+    tmp = pathlib.Path(tempfile.mkdtemp()) / "two.npz"
+    np.savez(tmp, **{k: z[k] for k in z.files if k != "positions"},
+             positions=np.stack([z["positions"], z["positions"] + [0, 0, 1000]]))
+    two = solvent_clusters(tmp, n=200)
+    zmean = np.array([p[:, 2].mean() for p in two[0]])
+    moved = zmean > 500
+    assert 50 < moved.sum() < 150, moved.sum()
+    for p in two[0]:                             # each cluster from ONE frame
+        assert np.ptp(p[:, 2]) < 100, "cluster spans both frames"
+    assert len(one[0]) == 200 and all(len(p) == len(q) for p, q in zip(one[0], one[1]))
+    print(f"ok: {moved.sum()}/200 clusters from the moved frame")
