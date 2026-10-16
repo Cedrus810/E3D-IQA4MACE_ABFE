@@ -221,6 +221,40 @@ segment: `U_s = (1 - s) U(0+) + s U(0)`, s in [0, 1].
    carve.
 5. Forces finite and smooth on lambda in (0, 1].
 
+**c is free, so bound it** [decided, D17, user 2026-10-15; S13.41]. Both
+endpoints are the backbone's own energies, so the total is exact for any
+c. That freedom is used to keep U well-behaved where the head is out of its
+training range. Without it, at lambda -> 0+ the crowded shell made sum c
+overshoot the backbone's coupling, and U = E_bb - sum c ran away (S13.41).
+
+*Scope of "exact"* (review, 2026-10-16). At fixed endpoints, with a correct
+implementation and enough sampling, changing the head changes only the path
+and the attribution, not the endpoint free-energy difference. It does not
+guarantee three things:
+- that the endpoints are the reference states we want (S7.2, D18);
+- that the total is unchanged when the ML region size n changes, since n
+  changes the hybrid Hamiltonian;
+- that the endpoint is physical just because the per-atom terms close.
+
+- **Cover switch.** Each ligand-environment D_ia is multiplied by
+  `cover_switch(r_ia)`. The switch is 1 above the shortest contact in the
+  head's training clusters (`COVER_R`) and smoothstep to 0 over 0.2 A below
+  it. The explicit Coulomb is not switched.
+- **Backbone cap.** Define truth = E_bb(R) - E_bb(R_L) - E_bb(R_E) and
+  S = sum c. Then
+  `S_eff = smin_tau(S, softplus_tau(truth + m))`, and the excess S - S_eff is
+  taken evenly off every c_i. Here m = 0.5 eV (about 3 sd of r at n = 20,
+  S13.37) and tau = 0.025 eV.
+  - It guarantees U(0+) >= min(E_bb(R), E_bb(R_L) + E_bb(R_E) - m), so U
+    stays above the two physical endpoints minus m at every lambda.
+  - Cost: two extra fragment backbone calls per step; the 2080 Ti ML/MM
+    step at n = 20 goes from 0.165 to 0.30-0.32 s (S13.42).
+  - The excess depends on R only, so dU/dlambda_i = c_i still holds.
+  - The cost is the two fragment energies at every step.
+- **Effect on attribution.** What the switch and the cap remove stays in r,
+  and so in dG_cut. In ordinary configurations neither acts: the start frame
+  changes by 0.00 kJ/mol.
+
 **Endpoint: an MM repulsive wall, then refill** [decided, user 2026-10-10;
 details open]. Without one, waters move into the ligand as lambda -> 0 and the
 backbone and head are evaluated far outside their domain (S11 R1). Three
@@ -256,9 +290,31 @@ Open within this decision:
   scheme (S6.3).
 - **GCMC code**: `grand` 1.1.0 is in `openmm_dev` (production, used as is);
   not in `openmm_dev_ubio`. Both run POLAR-1-M + the head identically
-  (smoke, workstation A, 2026-10-10). The pocket-water cycle already designed in
-  `ABFE_IBS/ABFE_IBS/PLAN_pocket_water_sampler_redesign.md` (fixed-N ABFE +
-  kT ln P(N)) is the candidate for the complex leg's W3.
+  (smoke, workstation A, 2026-10-10). The pocket-water cycle of `ABFE_IBS`
+  (fixed-N ABFE + kT ln P(N)) is the candidate for the complex leg's W3.
+  Correction (2026-10-14): the file cited here before,
+  `ABFE_IBS/ABFE_IBS/PLAN_pocket_water_sampler_redesign.md`, is the user's
+  draft; what ABFE_IBS built is
+  `ABFE_IBS/ABFE_IBS/docs/design/PLAN_pocket_water_swap_sampler_2026-09-27.md`
+  (relocation MC), after the paused GCNCMC route of
+  `docs/design/PLAN_pocket_water_gcmc_patch.md`. Reference note:
+  `REF_pocket_water_from_ABFE_IBS_2026-10-14.md`. It is a reference, not
+  design; its numbers are ABFE_IBS's and are not re-measured here.
+- **W3 as a P(0) estimate** (from the reference note; derivation checked
+  here, nothing measured). For a wall `W >= 0`,
+  `F(no wall) - F(wall) = kT ln < exp(-beta W) >_(no wall)`. For a hard
+  wall this is `kT ln P_(no wall)(N_wall = 0)`, where `N_wall` counts the
+  waters inside the wall. In the solvent leg, `P(0)` for a drug-sized
+  cavity is far in the tail, so stepwise MM softcore removal stays the
+  method there. In the complex leg it is the same far-tail problem as
+  ABFE_IBS's N* = 0 and needs an N bias. The counting region must be the
+  wall's own region.
+- **Is exchange slow? Measure before building GCMC** [open; recommendation].
+  D14 says GCMC "where water exchange is slow". ABFE_IBS found MD already
+  refills the ligand volume in JNK1 and BRD4 at lambda = 0
+  (`REF_...` S2, [not verified here]). So the first complex-leg step is a
+  cheap probe: 1 ns of plain MD at lambda = 0 with no wall, tracking water
+  identities. GCMC follows only if it finds sites that do not exchange.
 
 ---
 
@@ -354,7 +410,7 @@ is the ligand plus its nearest waters; the rest is MM.
 whole residues under minimum image and strips the MM ligand-environment
 nonbonded terms the ML region replaces.
 
-### 6.2 Far field: also attributable  [open]
+### 6.2 Far field: also attributable  [decided, D10, 2026-10-14]
 
 The ligand's MM nonbonded interactions with waters outside the ML region are
 pairwise by construction. Scale them with the same per-atom `lambda_i` (MM
@@ -363,19 +419,271 @@ diagonal path covers the far field as well. This removes v2-S13.13's
 "near-field only" limitation, at the cost of mixing ML and MM physics in one
 map; the two parts are reported separately and summed.
 
-### 6.3 Not yet designed
+### 6.3 ML/MM with FIRES and the wall  [decided, D16, 2026-10-14]
 
-- **Which waters are ML.** The nearest-n set changes as waters diffuse; a
-  Hamiltonian that switches waters between ML and MM mid-run is discontinuous.
-  **Decided (D11, 2026-10-12): FIRES first** (Rowley & Roux, JCTC 2012 -- not
-  re-read here): the n ML waters keep their identity, and a boundary set by
-  the farthest inner water keeps inner and outer waters from crossing, so the
-  Hamiltonian stays continuous and the ML waters cannot diffuse away.
-- **Region size.** Under S3 the total is exact at any n; what grows with n is
-  the remainder (v2-S13.23: 9-20% at n = 100) and the cost. Choose n from the
-  measured remainder.
-- **Step time on POLAR-1-M.** v2-S13.13's ~200 ms/step and 66 h per 12-window
-  leg were measured on MACE-OFF24, not POLAR-1-M. Measure it (S8.0).
+D10, D11, D14 and D15's first radius are decided; this section turns them into
+one Hamiltonian. Items marked *(choice)* are recommendations still to approve.
+
+**Source.** Rowley & Roux, JCTC 8, 3526 (2012), doi 10.1021/ct300091w,
+read in full 2026-10-14 (`ct300091w.pdf`, project root, supplied by the user;
+not for the repository). What it says (eq numbers are the paper's):
+
+- **Exact factorisation (eq 2-3).** The configurational integral with N
+  indistinguishable solvent molecules is rewritten as an integral over the n
+  molecules nearest the solute, times one over the N - n others restricted to
+  outside the outermost of the n, with weights 1/n! 1/(N - n)!. Sampling with
+  the n inner molecules strictly kept nearer than the N - n outer ones is
+  therefore "strictly exact". Averages are rigorous as long as inner and
+  outer molecules never swap, independent of the potential energy surface.
+- **Boundary (eq 4):** `R_inner = max(r_1, ..., r_n)`, recomputed every step;
+  r is the solute-solvent distance.
+- **Restraint (eq 5):** `E_FIRES = 1/2 sum_j k_FIRES (r_j - R_inner)^2`, a
+  half-harmonic repulsion on every outer molecule j that is closer than
+  R_inner. Through R_inner it also acts on the outermost inner molecule.
+- **k_FIRES = 500 kcal/mol/A^2.** This was found effective without numerical
+  instability at a 1 fs step (VV2, CHARMM, dual Langevin). All waters were
+  rigid (SHAKE).
+- **Check (Fig. 2).** In a pure MM test (451 SWM4-NDP waters around K+, 3 ns,
+  n = 12), the FIRES RDF equals the unrestrained RDF for r < 4 A. It
+  deviates slightly at 4-5 A, where the restraint is active.
+- **Limitations stated:**
+  - The restraint fires more often as n grows.
+  - Dynamics, for example exchange rates, are not physical.
+  - A reflective boundary, or exchanging momenta at a "virtual collision",
+    would be the fix. SAFIRES (Kirchhoff et al., JCTC 17, 5863, 2021) later
+    did exactly that, and records that Bulo et al. saw molecules accumulate
+    at a FIRES boundary.
+
+#### 6.3.1 Partition of the Hamiltonian
+
+The atoms are L (the ligand), I (the n inner waters, ML, fixed identity) and
+O (the outer waters, MM). The system is the prepared solvent leg: 4,076 atoms,
+1,345 TIP3P waters, a 35 A box, PME.
+
+| term | computed by | lambda dependence |
+|---|---|---|
+| L internal, L-I, I-I | ML on L u I: anchored U of S3 (`E_bb(L u I)` and `c_i`; `E_bb(L) + E_bb(I)` at lambda = 0) | anchored (S3) |
+| L-O | MM: Coulomb (PME) + LJ | linear in lambda_i (D10) |
+| I-O, O-O, O internal | MM (TIP3P) | none |
+| wall, L x (I u O) | MM | switch s_w (W1, W3) |
+| FIRES, I vs O relative to L | restraint | none |
+
+**MM terms removed**, because ML supplies them:
+- the ligand's bonded terms;
+- L-L, L-I and I-I nonbonded terms, removed by exceptions. PME's exclusion
+  correction then removes their reciprocal part. This is the same mechanism
+  `scaled_system` relies on, checked to 0.03 kJ/mol in S13.36.
+
+`strip_ligand_environment_nonbonded` in `openmm_bridge.py` strips L from the
+whole environment. That fits an all-ML environment, not this split.
+
+**Embedding is mechanical.** ML-MM electrostatics use MM charges (TIP3P;
+ligand charges scaled by lambda_i). The ML region is not polarised by the MM
+waters.
+
+**All waters stay rigid (SETTLE), the inner ones too** *(choice)*. Reasons:
+- FIRES relabels waters, so inner and outer waters must have the same degrees
+  of freedom.
+- It keeps 2 fs steps.
+- The head's clusters were cut from TIP3P MM frames (S5.2), so ML is
+  evaluated on exactly the geometry it was trained on.
+
+**PBC.** The ML coordinates of L u I are unwrapped around the ligand each
+step (minimum image per whole residue, as in `carve_from_arrays`). The ML
+region (~8 A at n = 20) is far below half the box.
+
+#### 6.3.2 FIRES
+
+- **Ordering distance** (D16, revised by the user 2026-10-14 after S13.38):
+  `d_w = softmin_beta(|r_O(w) - r_i|)` over the water oxygen and the ligand
+  heavy atoms i, with `softmin_beta(x) = -(1/beta) ln sum exp(-beta x)`,
+  beta = 20 /A.
+  - The softmin offset from the true minimum is at most ln(19)/beta =
+    0.15 A, and measured at 0.034 A or less.
+  - Why not all atoms. The first version ran over all atoms, the
+    closest-atom metric of `carve_from_arrays`. It put the restraint on H,
+    and stacked pairs pushed omega dt to >= 1.8. The run went NaN at
+    57-63 ps at 2 fs (S13.38). On heavy atoms omega dt is <= 0.66 and the
+    run is stable.
+  - What it costs. The inner set is not exactly the closest-atom carve of
+    the remainder scans: 17 of 20 waters are shared on em_solvent.npz.
+  - The paper's own ordering was also heavy-atom, ion to water.
+  - A centre-of-mass sphere does not fit: Atenolol is 12 x 6 x 10 A.
+- **Restraint** *(choice: a C1 variant of eq 5)*:
+  `U_F = sum_{w in I} sum_{v in O} (k/2) (d_w - d_v)^2 theta(d_w - d_v)`.
+  - Eq 5 with `R_inner = max` is continuous in energy. But its force jumps
+    when the outermost inner water changes while an outer water is inside
+    R_inner, because the max hands the reaction force to a different water.
+  - The pairwise sum has no such jump: it is C1 everywhere.
+  - It equals eq 5 whenever only the outermost inner water is beyond a given
+    outer water, which is the usual violation.
+  - Both are exactly zero on the allowed region, so the exactness argument
+    holds for either.
+  - It costs n x 1,325 pair terms per step and is computed in the same torch
+    force as ML.
+- **What the free energy is exact for.** This is the paper's eq 3, applied
+  here to the alchemical path.
+  - Let H_n be the adaptive Hamiltonian in which the n waters nearest the
+    ligand by d are ML. H_n is discontinuous wherever the order changes.
+  - With the order strictly kept (k -> infinity), the FIRES ensemble is
+    H_n's ensemble times C(1345, n), the same at every lambda. So dG under
+    H + U_F tends to dG under H_n.
+  - At finite k, dG is still exact for H + U_F, which is the Hamiltonian at
+    every lambda. Only its distance from H_n is approximate.
+  - That distance is measured, not assumed: <U_F>, and how often and how deep
+    the order is violated, per lambda window.
+- **At lambda = 0 the ligand is a ghost**, but U_F still orders waters by
+  distance to it.
+  - In the hard limit that is only a relabelling, with no physical effect.
+  - At finite k it is a weak ghost-water coupling. The same measurement
+    bounds it.
+- **k** *(choice)*: start from the paper's 500 kcal/mol/A^2 (2,092
+  kJ/mol/A^2). That was tested at 1 fs; at 2 fs, check stability in the smoke
+  run and lower k only if it fails. Report the distribution of violation
+  depth.
+- **n**: 20, the operating size (S13.25). The head is valid for n <= 50
+  (S13.37).
+- **Boundary artefact.** Use the paper's own check (Fig. 2), on our box
+  and metric: pure MM, the same 4,076-atom leg, FIRES at n = 20 against no
+  restraint. Compare the density of waters against d and the ligand-water
+  RDFs. This needs no ML, so it is the first smoke.
+  - If it accumulates the way Bulo et al. report, SAFIRES's elastic-collision
+    integrator is the known fix. It needs a custom integrator, so it is not
+    planned now.
+
+#### 6.3.3 The wall (D14, D15)
+
+- **Form**: `U_wall = s_w sum_{i in L} sum_{a in I u O} eps_w g(r_ia / r0_ia)`,
+  with `g(x) = x^-12 - 2 x^-6 + 1` for x < 1 and 0 otherwise.
+  - This is WCA shifted: g = g' = 0 at r0, so the forces are continuous.
+- **r0 per element pair** (D15, revised by the user 2026-10-15 after
+  S13.41): the larger of the shortest contact in the operating head's
+  training clusters and DES370K p1, per (ligand element, water element):
+  - ligand O / N / C / H against water O: 2.46 / 2.62 / 2.69 / 1.66 A;
+  - against water H: 1.54 / 1.69 / 1.83 / 1.39 A.
+
+  Why: at lambda = 0+ only r = truth - sum c acts, and r is trusted only
+  where the backbone-labelled clusters reach. The first radius (DES370K p1)
+  let ligand H be crushed to 1.1-1.25 A, where r is -1,243 kJ/mol (S13.41).
+  The cost is that these radii sit at the edge of the 298 K contacts, so W1
+  is no longer ~0: it is measured (FEP or windows).
+- **eps_w** *(choice)*: set in the smoke run at lambda = 0. It is the
+  smallest value at which the closest L-water contact stays above ~0.9 r0;
+  at x = 0.8, g = 7.9. E7 (S13.42): eps_w = 25 kJ/mol keeps it at
+  >= 0.92 r0 at lambda = 0+; smaller values not tried.
+- **W1** (lambda = 1, s_w from 0 to 1). With the revised radii (S13.41)
+  the wall touches the edge of the 298 K contacts, so dG_W1 is small but not
+  zero. The first estimate is one FEP step, -kT ln <exp(-beta U_wall)> at
+  s_w = 0 (E7 state q = 0). Windows are added if that has poor overlap.
+  Measured (S13.42): dG_W1 = +0.006 kJ/mol, largest sample 0.12 kT, so one
+  step suffices on this start frame.
+- **W3** (lambda = 0, s_w from 1 to 0). The cavity floods, so the wall is
+  softcored: r is replaced by `(alpha (1 - s_w) r0^6 + r^6)^(1/6)`, a few
+  windows.
+  - ML is still on in W3 (`E_bb(L) + E_bb(I)`), so W3 windows cost as much
+    as W2 windows.
+  - Releasing I to MM first would add a separate ML -> MM water-cluster
+    term, which is not zero.
+  - For the complex leg's W3, see `REF_pocket_water_from_ABFE_IBS_2026-10-14.md`
+    (S3).
+- **Per-atom attribution**: W1 and W3 use per-atom s_w,i on the diagonal
+  path. dU/ds_w,i is the per-atom wall energy, which gives the cavity term
+  of S3.
+
+#### 6.3.4 One path, all segments
+
+    W1    lambda = 1,  s_w 0 -> 1                       MM wall, FEP / few windows
+    W2    lambda 1 -> 0+, wall on                       TI: ML c_i + MM far-field, per atom
+    cut   lambda = 0+ -> 0, s 0 -> 1, wall on           cut windows (S3, S13.25)
+    W3    lambda = 0,  s_w 1 -> 0 (softcore)            MM wall, windows
+
+    dG = dG_W1 + sum_i (dG_i^ML + dG_i^MM) + dG_cut + dG_W3
+
+- Per atom: dG_i^ML and dG_i^MM from W2, and the wall terms from W1 and W3.
+  Global: dG_cut.
+- With the wall on, W2 needs no softcore: the wall keeps every L-water
+  distance above ~r0, so linear LJ and Coulomb in lambda_i stay finite. That
+  is what D14 buys.
+- One HREMD ladder over a single path coordinate, as `AnchoredForce` does
+  today for W2 and the cut.
+
+#### 6.3.5 Exact checks (to code; float64 where the platform allows)
+
+- **E1 Partition.** At lambda = 1 with s_w = 0, the MM part equals the full
+  MM energy minus the removed terms. The removed terms are computed
+  independently from subsystem energies, to the precision of the double
+  platform.
+- **E2 Far field.** The L-O MM energy is linear in lambda_i. Per-atom
+  dU/dlambda_i sums to the total and matches finite differences.
+- **E3 Anchored.** S3 checks 1-5, inside the full system.
+- **E4 FIRES.** U_F = 0 when ordered. Forces match finite differences, and
+  stay continuous across an order swap.
+- **E5 Wall.** Zero above r0. Force continuous at r0. Softcore finite at
+  r = 0 for s_w < 1.
+- **E6 PBC.** Energy unchanged when the whole system is translated by a box
+  vector, and when molecules are rewrapped.
+- **E0 FIRES on pure MM.** The paper's Fig. 2 check, as above. It runs
+  before any ML.
+- **E7 Continuity, end to end.** Short NVE runs at lambda = 1, 0.5 and 0 with
+  the wall on, and in W3. The drift is compared against the same box under
+  pure MM. This is the test of "the potential is continuous".
+
+Status (2026-10-15): E0-E6 pass (S13.38-S13.40). E7 passes after the D15
+revision and D17 (S13.42): no state shows a jump, and the sd is at the MM
+level. Open: at lambda = 0+ the 2 fs run drifts +4-6 kJ/mol/ps, which
+shrinks at 1 fs, so it is probably integration error from a stiff term.
+
+#### 6.3.6 Implementation
+
+- **New `decomp/mlmm.py`**:
+  `build_mlmm_system(leg, n, model, radii, k, eps_w) -> (System, MLMMForce)`.
+  - **NonbondedForce**:
+    - exceptions for L-L (zero, since ML supplies the ligand's internal
+      terms), L-I and I-I;
+    - ligand charges through particle-parameter offsets driven by per-atom
+      global lambda_i, with `addEnergyParameterDerivative` for exact per-atom
+      dU/dlambda_i under PME;
+    - ligand LJ epsilon set to 0.
+  - **Ligand-O LJ**: a `CustomNonbondedForce` with interaction group (L, O),
+    linear in lambda, using the system's cutoff and switching.
+    - Its per-atom derivative is the unscaled per-atom pair sum (short-range,
+      exactly pairwise), computed on stored frames.
+    - The long-range correction must be treated consistently; to check in E1.
+  - **Wall**: a `CustomNonbondedForce` with interaction group (L, I u O),
+    and r0 from a `Discrete2DFunction` over element types.
+  - **ML + FIRES**: one `PythonForce` on L u I (unwrapped), reusing
+    `AnchoredForce`, plus U_F over all waters.
+  - Ligand bonded MM forces are removed. The prepared leg's constraints are
+    kept.
+- **`run_abfe.py --mode mlmm`**: the ladder of S6.3.4 on `hremd.HREMD`'s
+  OpenMM backend.
+
+#### 6.3.7 Smoke and measurements before any production plan
+
+On a 2080 Ti workstation (smoke only, minutes each):
+- E1-E7;
+- the step time at n = 20;
+- <U_F> and order violations;
+- <U_wall> at lambda = 1;
+- the closest contact at lambda = 0 (sets eps_w);
+- the boundary density.
+
+Then a timing run on the RTX 5090 before planning Stage A.
+
+Done so far (2026-10-15, S13.38-S13.42): E0-E7; the step time at n = 20
+(2080 Ti: 0.30-0.32 s with the cap); <U_F> and violations (U_F <= 17.4
+kJ/mol, <= 10 pairs); <U_wall> at lambda = 1 (W1 = +0.006 kJ/mol); the
+closest contact at lambda = 0 (eps_w = 25 holds >= 0.92 r0); the boundary
+density (E0). Not done: the RTX 5090 timing.
+
+- **Region size.** Under S3 the total does not depend on the head at a given
+  n. It does depend on n, because n defines the hybrid ML/MM Hamiltonian:
+  which waters are ML (corrected 2026-10-16; the earlier text said "exact at
+  any n"). What also grows with n is the remainder (v2-S13.23: 9-20% at
+  n = 100) and the cost. Choose n from the measured remainder, and measure
+  the total's n dependence (D18).
+- **Step time on POLAR-1-M.** The ML force call is measured (S13.24); the
+  full ML/MM step, MM and the PythonForce round trip included, is not.
 
 ---
 
@@ -395,6 +703,51 @@ narrows to attribution only (S9).
   (`/home/ruigengji/ABFE_IBS`). A comparison, not a pass/fail: the two are
   different Hamiltonians.
 - Hydration free energies against experiment, for drugs where it exists.
+- **The decoupled endpoint is not yet a defined reference state** (review,
+  2026-10-16; S13.47). At q = 4 the code has:
+  - the 20 inner waters still ML (`E_bb(I)`);
+  - inner-outer still MM;
+  - FIRES still ordering the waters by distance to the ligand's heavy
+    atoms (`mlmm.py`, `heavy_selection(lig)`, independent of lambda).
+
+  So H_end = E_ML(L) + E_ML(I) + U_MM,rest + U_FIRES(L, I, O). Three
+  consequences:
+  - The solvent's partition is still defined around the ghost ligand.
+  - The ghost is not fully decoupled: FIRES forces act on its atoms, the
+    ML droplet follows it, and its conformational ensemble is not the gas
+    phase.
+  - FIRES is exact only when relabelling solvent molecules leaves the
+    energy unchanged. That holds in all-MM water, but not in hybrid water,
+    where membership of the inner set decides which interactions are ML.
+
+  G_end therefore holds a ligand-shape-dependent solvent reorganisation
+  term of the ML droplet around the ghost. It is not defined or measured,
+  so the total is not yet "ligand in gas + bulk solvent". The reference
+  state to aim for is decision D18 (S12).
+
+  **Decided (D18 (a), user 2026-10-16): bulk MM water.**
+  - The path gets one more leg at the decoupled end: B -> B', the n inner
+    waters ML -> MM, with FIRES kept.
+  - A neat-solvent reference dG_ref (same box and n, FIRES around a
+    non-interacting dummy atom) removes the ligand-independent part.
+
+  Then
+      dG_hyd = dG(A -> B) + dG(B -> B') - dG_ref,
+  and dG(B -> B') - dG_ref is the reorganisation term above. It is reported
+  as a global term (the dG_ref leg is a Claude addition, to confirm).
+- **Path-only control (planned, 2026-10-16).** The same W1 | W2 | cut | W3
+  path with every term MM must reproduce the standard MM decoupling of the
+  same leg. Both ends must match the reference calculation: ligand
+  internal MM, L-L and L-I MM with L-I scaled by lambda like L-O, and
+  FIRES kept at n = 20 on MM inner waters. Then relabelling is a symmetry,
+  FIRES is exact, and:
+  - acetamide, +34.04 +- 0.14 kJ/mol (S13.44): same Hamiltonian, same
+    endpoints;
+  - this tests the wall, the refill and the path bookkeeping as a whole,
+    which the local exact checks (S13.43, S13.46) do not;
+  - if it agrees, any remaining E3D-vs-MM difference is the Hamiltonian
+    (ML vs GAFF2, and the hybrid water above) plus window error; if not,
+    the cycle's implementation is wrong, independently of the head.
 
 ### 7.3 Attribution
 
@@ -411,6 +764,46 @@ narrows to attribution only (S9).
 
 ## 8. Staging
 
+**Route from here** (user, 2026-10-15). Solvent legs first; complex legs and
+pocket water come later.
+
+1. **Close the dynamics question.** At the suspect lambda = 0+ states
+   (q 2.0, and the cut at q 2.5), run paired 2 fs / 1 fs NVE from one saved
+   state. Check forces against the energy gradient on the full system. Log
+   how often the D17 cap and the cover switch act. This decides whether the
+   lambda = 0+ drift is integration error or the implementation (S13.42).
+   **Done 2026-10-15 (S13.43)**: integration error, forces correct. The cap
+   and the cover switch act in most lambda = 0+ samples.
+2a. **Endpoint audit** (user, 2026-10-16, after the review of S13.47),
+    before more GPU time on the full path:
+    - fix the target reference state -- done: D18 (a), bulk MM water, via the
+      B -> B' leg and the neat-solvent dG_ref;
+    - run the path-only control with matched ends on acetamide (S7.2);
+    - then fill the W2 / W3 window gaps.
+2. **Wire the full calculation and measure its cost.** Put ML/MM, FIRES,
+   W1, W2, the cut and W3 into the production sampling entry
+   (`run_abfe.py --mode mlmm`, S6.3.4). Time the full step on the RTX 5090,
+   then set windows and the sampling budget from that.
+3. **Stage A on acetamide** (D8, S8.2).
+   - First check its own configuration coverage: clusters, head, and
+     `COVER_R` / wall radii recomputed from its training clusters.
+   - Then check window overlap, independent replicates and convergence by
+     block.
+   - Key results:
+     - the total agrees, within error, with a control path between the same
+       endpoints;
+     - the per-atom terms plus the cut and wall terms close to the total;
+     - the cut share, the cap's firing rate and the sensitivity to the wall
+       radius are all reported.
+4. **After Stage A, a small set of neutral drugs** (Stage B). Different
+   functional groups test whether the attribution transfers.
+
+Solvent legs: acetamide was built here (S13.44; MM dG_decouple +34.04 +-
+0.14 kJ/mol). Six neutral drug legs came from ABFE-IBS
+(`REF_solvent_legs_from_ABFE_IBS_2026-10-15.md`, `data/solvent_legs_ibs/`).
+They hold Na+/Cl-, and `mlmm.py` currently drops ligand-ion LJ and walls
+only waters, so it must be fixed before they are used.
+
 ### 8.0 Stage 0 -- before writing the anchored code
 
 Both cheap; both decide whether S3 is workable as written.
@@ -422,7 +815,9 @@ Both cheap; both decide whether S3 is workable as written.
    windows (S3). Static configurations are a proxy for the lambda = 0+ ensemble,
    not the ensemble itself.
 2. **POLAR-1-M ML/MM step time** -- ML part measured, S13.24 (121-331 ms);
-   full ML/MM step still to measure: a few hundred steps on the Atenolol leg at
+   full ML/MM step measured at n = 20 on a 2080 Ti: 0.165 s, 0.30-0.32 s
+   with the D17 cap (S13.41, S13.42); **on the RTX 5090: 91 / 119 / 200 ms
+   at n = 20 / 50 / 100 (S13.45)**. Originally planned: a few hundred steps on the Atenolol leg at
    n = 20 / 50 / 100. Sets the cost of everything after.
 
 ### 8.1 Code (once S3, S2.1 and S2.3 are decided)
@@ -432,9 +827,12 @@ Both cheap; both decide whether S3 is workable as written.
 - `run_abfe.py`: TI over lambda > 0 on the diagonal path, BAR (or cut windows)
   at lambda = 0, per-atom accumulation. **Done 2026-10-12** (`--mode anchored`,
   one path coordinate p in [0, 2] over both segments, `AnchoredForce`; S13.29).
-- Not yet: the MM wall (W1/W3, needs D15) and the ML/MM system with the
-  ML-water scheme (D11); both need OpenMM, `run_abfe.py` runs the torch
-  backend on the ML region alone today.
+- The MM wall (W1/W3) and the ML/MM system with FIRES (D11), designed in
+  S6.3 (D16): **code done 2026-10-14/15** (`decomp/fires.py`,
+  `decomp/mlmm.py`; D17 in `lambda_mask.anchored_energy`), checks E0-E7
+  (S13.38-S13.42). `run_abfe.py --mode mlmm` (the S6.3.4 ladder,
+  `decomp/mlmm_hremd.py`): **done 2026-10-16**, exact checks and smoke in
+  S13.46. Not yet: batching replicas into one ML call.
 - S2.3 (decided): explicit `E_es^LE` channel with the per-atom Euler split,
   target subtraction in `test_joint.py`, then one retrain on the arm-N recipe.
   **Done** (S13.28, retrain S13.32); the head has since been retrained twice on
@@ -445,9 +843,10 @@ Both cheap; both decide whether S3 is workable as written.
 A small solute in ML/MM water, sampling in minutes to hours. Answers what no
 static scan can: softcore need (S11 R1), cut-step overlap, ML-water identity
 (S6.3), lambda spacing, convergence against the message-masking control (S7.1),
-attribution against Shapley (S7.3). System: [open] -- recommend a drug fragment
-already in DES370K's chemistry (e.g. acetamide or phenol), so the head is in
-domain.
+attribution against Shapley (S7.3). System: **acetamide** [decided, D8, user
+2026-10-15], a drug fragment in DES370K's chemistry, so the head is in domain.
+Its solvent leg comes from the user. The checks and key results are in the
+route at the top of S8.
 
 The drug set is the first *real* system [decided]; Stage A is the protocol test
 in front of it, so that 66-h legs do not run on an unvalidated protocol.
@@ -467,7 +866,10 @@ Cost: ML force call on POLAR-1-M 121 / 197 / 331 ms at n = 20 / 50 / 100
 (S13.24, lower bound on the step), i.e. 40-110 h per 12-window solvent leg at
 100 ps on a 2080 Ti; ten drugs at n = 50 is ~660 GPU-h before W1/W3 and cut
 windows. Production is an RTX 5090, not yet timed; replace these with
-the 5090 measurement.
+the 5090 measurement. The full ML/MM step with the D17 cap is 0.30-0.32 s
+at n = 20 on a 2080 Ti (S13.42), so the same leg at 100 ps is ~100 h at
+1 fs or ~50 h at 2 fs per 12 windows. On the RTX 5090 it is 91 ms
+(S13.45): ~15 GPU-h per 12 windows at 2 fs.
 
 ### 8.4 Stage C -- complex legs, binding
 
@@ -512,7 +914,10 @@ the backbone and head are far outside their training domain and an MLIP has no
 repulsive wall (minimising with the learned potential ran to -5e5 eV, STATUS).
 MM softcore has no ML analogue yet. **Addressed by the wall + refill scheme
 (S3, W1-W3)**; what remains is the wall-radius choice and the attribution's
-dependence on it. Stage A measures both.
+dependence on it. Stage A measures both. The wall alone was not enough:
+the head's sum c overshot in the crowded lambda = 0+ shell and ran away
+(S13.41); D17 (cover switch + backbone cap) bounds it, and E7 is stable
+(S13.42).
 
 **R2 - Cut-step overlap.** Mean remainder 0.3-0.5 eV (7-12 kcal/mol)
 (v2-S13.23). Stage 0.1.
@@ -530,7 +935,10 @@ it.
 
 **R6 - Physical meaning of the per-atom split.** S4. Validation, S7.3.
 
-**R7 - Cost.** Unknown until S8.0.2.
+**R7 - Cost.** Full ML/MM step on the RTX 5090 with the D17 cap: 91 / 119 /
+200 ms at n = 20 / 50 / 100 (S13.45), i.e. ~1.3 GPU-h per 100 ps window at
+n = 20. About half of the n = 20 step is fixed overhead, so batching
+replicas is the next lever.
 
 ---
 
@@ -545,14 +953,17 @@ it.
 | D5 | Lock POLAR-1-M (S2.1) | **decided** | user, 2026-10-10 |
 | D6 | Long-range electrostatics as an explicit pair channel (S2.3) | **decided** | user, 2026-10-12 |
 | D7 | IQA: validation only, drop synthetic `L_IQA` from training (S5.3); arm N recipe | **decided** | user, 2026-10-12 |
-| D8 | Stage A system (S8.2) | open -- recommend a small drug fragment | |
+| D8 | Stage A system (S8.2): acetamide, solvent leg first; leg supplied by the user | **decided** | user, 2026-10-15 |
 | D9 | Drug set composition (S8.3) | open | |
-| D10 | Far field attributed via MM per-atom lambda (S6.2) | open | |
+| D10 | Far field attributed via MM per-atom lambda (S6.2): the ligand's MM nonbonded terms with waters outside the ML region scaled by the same lambda_i, MM softcore | **decided** | user, 2026-10-14 |
 | D11 | ML-water identity scheme (S6.3): FIRES first | **decided** | user, 2026-10-12 |
 | D12 | One flagship paper (S10) | open | |
 | D13 | Mark v2 S0-S12 as superseded in the file itself | open | |
 | D14 | Endpoint: MM repulsive wall held through the ML decoupling, then refill; GCMC where water exchange is slow (S3 W1-W3) | **decided** | user, 2026-10-10 |
-| D15 | Wall radius; GCMC waters ML or MM; GCMC environment (S3) | open -- method agreed (user, 2026-10-12): radius from the MLP's non-physical short-range region and the training data's contact coverage; GCMC parts open | |
+| D15 | Wall radius; GCMC waters ML or MM; GCMC environment (S3) | method agreed (user, 2026-10-12): radius from the MLP's non-physical short-range region and the training data's contact coverage. First radius (user, 2026-10-14): DES370K p1 per element pair (S13.31) -- **failed at lambda = 0+** (S13.41: ligand H crushed, r a well). **Revised** (user, 2026-10-15): per (ligand, water) element pair the larger of the operating head's training-cluster minimum contact and DES370K p1: C-Ow 2.69, C-Hw 1.83, N-Ow 2.62, N-Hw 1.69, O-Ow 2.46, O-Hw 1.54, H-Ow 1.66, H-Hw 1.39 A; W1 measured by FEP: +0.006 kJ/mol (S13.42); eps_w = 25 kJ/mol keeps lambda = 0+ contacts >= 0.92 r0 (S13.42); a second radius for Stage A's sensitivity check still open. GCMC parts open | user |
+| D16 | ML/MM + FIRES + wall design (S6.3): partition, softmin ordering over water O x ligand heavy atoms (revised from all atoms after S13.38's 2 fs instability), C1 pairwise variant of FIRES eq 5, rigid waters, k from 500 kcal/mol/A^2, n = 20, wall form, path, checks E0-E7 | **decided** | user, 2026-10-14 |
+| D17 | S3: bound the attributed coupling -- cover switch on D_ia (training-cluster contact coverage) and backbone cap on sum c (m = 0.5 eV) (S3, S13.41) | **decided** | user, 2026-10-15 |
+| D18 | Reference state of the decoupled end (S7.2, S13.47): **bulk MM water**, option (a). B -> B': at the decoupled end, with FIRES kept, the n inner waters are switched ML -> MM. At B' relabelling is a symmetry and FIRES is exact, so B' = gas-phase ligand (ML internal) + bulk MM water. *Added by Claude 2026-10-16, to confirm:* this leg also carries the n waters' own ML-vs-MM free energy (the absolute energy offset of the ML water, plus the bulk chemical-potential difference). That part does not depend on the ligand, so it is removed by a neat-solvent reference leg dG_ref: the same box and n, FIRES around a non-interacting dummy atom, n waters ML -> MM. dG_hyd = dG(A -> B) + dG(B -> B') - dG_ref. The difference dG(B -> B') - dG_ref is the ghost-shape solvent-reorganisation term, measured explicitly and reported as a global term like dG_cut | **decided** (a); the dG_ref leg to confirm | user, 2026-10-16 |
 
 ---
 
@@ -561,8 +972,9 @@ it.
 v2-S13.1-S13.23: `RESEARCH_PLAN_v2.md` S13, unchanged. New measurements below,
 from S13.24.
 
-Machines: workstations A and B (RTX 2080 Ti, smoke and timing checks only);
-PBS nodes P1 and P2 (RTX 3090) and P3 (RTX 4080); production GPU RTX 5090.
+Machines: workstations A, B and C (RTX 2080 Ti, smoke and timing checks only);
+PBS nodes P1 and P2 (RTX 3090), P3 (RTX 4080) and P4 (RTX 5090, the
+production GPU).
 
 ### 13.24 Stage 0 smoke on workstation A (2026-10-10), env `openmm_dev`
 
@@ -1197,3 +1609,699 @@ change from that head is the pooled states. c20000 is the alternative where
 n = 50 at intermediate lambda matters more than DES370K. Both remain
 MM-proxy results (S13.36 caveat): the anchored ML ensemble at intermediate
 lambda is still unsampled.
+
+### 13.38 FIRES code: E4 checks pass; the paper's eq 5 has a force jump the pairwise form removes
+
+`decomp/fires.py` (`Fires`: softmin closest-atom ordering, pairwise C1 variant
+of eq 5, k = 500 kcal/mol/A^2, beta = 20 /A; S6.3.2, D16).
+`experiments/2026-10-14_fires_mm/check_fires.py` on workstation A, CPU,
+float64, `em_solvent.npz`, n = 20 (`check_fires.log`):
+
+    [1] ordered frame (inner set selected on it)   U = 0, F = 0; R_inner 3.722 A, nearest outer 3.766 A
+    [2] nearest outer water pushed 0.3 A inside    U = 173.6 kJ/mol, 3 violating pairs
+        forces vs central FD (h 1e-4 A, 21 comp.)  max |d| 1.9e-5 kJ/mol/A (|F| up to 1,015)
+    [3] same water moved radially through R_inner  max neighbour step of U and dU/ds halves when the
+                                                   step halves (ratios 1.99, 2.00): C1
+    [4] outermost inner water changes during a     pairwise: step halves (2.00) -- continuous;
+        violation (radial force on it)             eq 5 (max): 315 kJ/mol/A jump, not shrinking (1.00)
+    [5] box translation / rewrapping               |dU| 5e-12 / 0, max |dF| 2e-11 / 0
+    [6] softmin vs true closest-atom distance      0.000-0.032 A over the nearest 60 waters (bound 0.24);
+                                                   same 20 inner waters as by the true minimum
+    [7] CPU float64, 8 threads                     7.6 ms per energy + force call
+
+[4] is the measured reason for the pairwise form (D16): eq 5's force on the
+outermost inner water jumps by k x (violation depth) when another inner water
+overtakes it.
+
+**E0 smoke** (`fires_mm.py`, workstation C (RTX 2080 Ti), 2 + 10 ps per run, seed 7,
+`smoke*.log`). Pure MM with FIRES as an `openmm.PythonForce`:
+- torch on CPU: 8.4 ms/step;
+- torch on the GPU: 2.2 ms/step;
+- MM alone: 0.24 ms/step.
+
+The run is stable at 2 fs with k from the paper, T 301 K. U_F stays under
+30 kJ/mol, with 0-4 violating pairs per snapshot. In the free run, the 20
+waters nearest at t = 0 have spread to R_inner 13 A by 10 ps: without FIRES
+the ML set would leave. The full E0 (3 ns per run) is not run yet.
+
+**E0 first attempt: the FIRES run went NaN; diagnosed as a step-size
+instability on H atoms** (2026-10-14, workstation C). In `run_e0.sh`, the
+free run finished (3 ns, 0.31 ms/step, T 298.5 K, `e0_free.npz`). The FIRES
+run hit a NaN during its 100 ps equilibration.
+
+`diag_nan.py` reproduces it: NaN at 56.8 ps. Before that, the deepest
+violation was 0.16 A and the largest FIRES force 521 kJ/mol/A, almost always
+on an H atom.
+
+Hypothesis: the closest-atom ordering puts the restraint on H (1 amu), and
+several violating pairs stack on one atom. A harmonic mode is stable under a
+Verlet-type step only while omega dt < 2. `diag_omega.py` tests this. Every
+0.1 ps it takes the exact Hessian of U_F (autograd, 3 x 3 diagonal blocks)
+for every atom that feels a FIRES force, and computes
+omega = sqrt(lambda_max / m). Diagonal blocks, sampled every 0.1 ps, give a
+lower bound.
+
+    ordering metric (k = 500 kcal/mol/A^2, 2 fs, seed 7)   result            omega dt when violated: median / p99 / max   atom
+    all atoms (D16 as coded)                               NaN at 63.2 ps    1.24 / 1.82 / 1.82                           H
+    water O x ligand heavy atoms                           150 ps, no NaN    0.35 / 0.55 / 0.66                           C, N, O
+                                                           (violated in 64% of snapshots; deepest 0.105 A)
+
+The lower bound on the all-atom run sits at 1.2-1.8 throughout and the run
+fails; on heavy atoms it is ~3.5x lower, as sqrt(m_C / m_H) predicts, and the
+run is stable. The hypothesis is supported. **D16 revised** (user,
+2026-10-14): the ordering now runs over water O x ligand heavy atoms
+(`heavy_selection`). The heavy-atom inner set shares 17 of
+20 waters with the all-atom set on em_solvent.npz.
+
+Also noted, not investigated: the prepared leg's `PeriodicTorsionForce` has
+0 torsions; the ligand carries 19 bonds, 22 constraints, 71 angles and 205
+nonbonded exceptions. All MM frames (clusters, remainder scans) were sampled
+with this torsion-free ligand. In ML/MM, ML supplies the ligand's internal
+energy.
+
+Also: files written on workstation C can show a stale size and mtime over
+NFS here for minutes (a 11 kB log read as 0 bytes). Read remote outputs on
+the node.
+
+**E4 rerun on the heavy-atom ordering** (`check_fires_heavy.log`,
+workstation A, CPU float64): all pass.
+
+    [1] U = 0 on the ordered frame; R_inner 4.578 A
+    [2] forces vs FD                5.0e-6 kJ/mol/A (|F| up to 2,074)
+    [3] C1                          ratios 1.99, 2.00
+    [4] pairwise                    continuous (ratio 2.00); eq 5 still jumps by 434 kJ/mol/A (ratio 1.00)
+    [5] PBC                         translation 1e-11, rewrap 0
+    [6] softmin offset              <= 0.034 A
+    [7] time                        2.7 ms per CPU call
+
+E0 was relaunched with the heavy-atom ordering for both runs. The free
+run's d must use the same metric, so the all-atom outputs are kept as
+`*_allatom*`.
+
+
+### 13.39 ML/MM system code: E1, E2, E3, E5, E6 pass after one PBC bug in the exceptions
+
+`decomp/mlmm.py` (`build_mlmm_system`, `MLMMForce`, `set_path`,
+`mm_far_field_dudl`, `mm_far_field_per_atom_coulomb`; S6.3.6).
+`experiments/2026-10-14_mlmm_checks/check_mlmm.py` on workstation A: MM on
+the Reference platform (double precision), ML in float64 on the CPU, Ewald
+tolerance 1e-7, operating head (S13.37), em_solvent.npz, n = 20
+(`check_mlmm.log`).
+
+    E1  MM(ours), lambda = 1, s_w = 0   vs MM(ref) - (A-A pairs removed, summed in numpy at minimum image)
+                                        diff 1.2e-5 kJ/mol (removed -1,067 kJ/mol; A = L u I)
+    E2  Coulomb vs lambda                quadratic, not linear: deviation 0.015 kJ/mol at lambda = 0.5
+        per-atom sum (central diff.)     equals mm_far_field_dudl to 6e-10; that equals a FD of U to 2e-7
+    E3  unwrapped L u I                  equal to minimum-image distances (0 over 6,263 pairs); extent 18 x 11 x 15 A
+        p = 0 / p = 2                    E_bb(L u I) / E_bb(L) + E_bb(I) to 0 eV
+    E5  wall, two particles              zero above r0; force step halves with the step (2.00);
+                                         finite at r = 1e-4 A for s_w < 1; at s_w = 1, U(0.8 r0) = eps_w g(0.8)
+    E6  total U at q = 1.5 (all terms)   unchanged (0) when the system, one inner water, or the ligand
+                                         moves by a box vector
+
+**Bug found by E6 and fixed.** NonbondedForce computes exceptions without PBC
+by default. The new L-I and I-I exceptions join different molecules, and the
+raw coordinates can place them a box apart. Before the fix, moving one inner
+water by a box vector changed U by 0.68 kJ/mol, and moving the ligand changed
+it by 3.1. The fix is `setExceptionsUsePeriodicBoundaryConditions(True)`.
+
+**Two findings that changed the code.**
+- **The L-O Coulomb is quadratic in lambda, not linear.** The A region's MM
+  charges interact with their own periodic images 35 A away (1.45 kJ/mol in
+  total, present in the reference MM too), and the ligand's share scales as
+  lambda^2. So dU/dlambda uses an exact central difference.
+- **Per-atom dU/dlambda_i cannot come from switching on one atom's charge.**
+  That charges the cell: the naive per-atom sum came out at -321 kJ/mol
+  against a total of -38. Central differences in lambda_i are exact,
+  because the energy is quadratic in each lambda_i.
+
+**E1 method note.** Comparing against "ref minus A alone in the same box"
+leaves the A-A image term. Estimating that term by box scaling was swamped
+by PME error at the default tolerance, and was not 1/L^3 at 35 A. The direct
+pair sum closes it to 1e-5.
+
+Not yet run: E7 (NVE continuity with ML on the GPU), the step time of the
+full ML/MM system, and eps_w from a lambda = 0 run.
+
+### 13.40 E0: FIRES leaves the solvent unchanged except a 0.2 A band at the boundary
+
+`run_e0.sh` on workstation C (RTX 2080 Ti), 2026-10-14 18:38 to 19:52, pure
+MM, heavy-atom ordering (D16), n = 20, k = 500 kcal/mol/A^2, 2 fs. Each run
+is 100 ps of equilibration plus 3 ns, seed 7, sampled every 0.5 ps (6,000
+snapshots); standard errors come from 5 blocks. FIRES ran at 2.68 ms/step
+(67 min); the free run at 0.58 ms/step while sharing the GPU. Mean T is
+298.4 / 298.6 K. The log is `e0_analysis.log`, read on the node.
+
+    R_inner (FIRES) vs the 20th-smallest d (free)    3.696 +- 0.001 vs 3.687 +- 0.002 A;
+                                                      quantiles 5/25/50/75/95 within 0.01 A
+    n(d) per 0.1 A, 55 populated bins                 |z| > 3 in 2: 3.6-3.7 A +0.30 waters (+10%, z 12),
+                                                      3.7-3.8 A +0.21 (z 5); all others within noise
+    N(d < x), free vs FIRES                           3.0 A: 4.57 / 4.63; 3.5: 14.29 / 14.31; 4.0: 29.14 / 29.78;
+                                                      5.0: 54.38 / 54.78; 6.0: 82.09 / 82.39
+    FIRES restraint                                   violated in 66% of snapshots, 1.65 pairs (max 13);
+                                                      depth median 0.028, max 0.117 A; <U_F> 1.28 kJ/mol (max 26)
+
+**What it shows.**
+- The boundary FIRES selects is the free shell's own 20th-water distance.
+- The solvent structure is unchanged within noise at every d except a band
+  at the boundary (median R_inner 3.69 A).
+- In that band waters accumulate: ~0.5 extra waters at 3.6-3.8 A, taken
+  from just outside. The excess within 4 A is 0.64; within 6 A it is down
+  to 0.3, about 1 SE.
+
+This is the paper's own observation (Fig. 2: deviations only where the
+restraint acts) and the accumulation Bulo et al. reported. The run is stable
+at 2 fs with the paper's k.
+
+**For the free energy.** dG is exact for H + U_F at any k. The boundary
+band measures how far H + U_F is from the ideal adaptive H_n. Whether that
+matters for dG depends on whether the band and <U_F> change with lambda.
+That is measured per window in E7 and in Stage A. SAFIRES's
+elastic-collision integrator is the known fix, if that comparison asks for
+it.
+
+### 13.41 E7, first pass: continuous at lambda = 1 and 0.5; at lambda = 0+ the remainder pulls waters through the DES370K-p1 wall
+
+`experiments/2026-10-15_e7_nve/run_e7.sh` on workstation B (RTX 2080 Ti),
+2026-10-15. Each state starts from thermal200 frame 0, which also picks the
+20 inner waters, with the operating head (S13.37) in float32, eps_w = 25
+kJ/mol, alpha = 0.5. Langevin runs 500 steps, then NVE 1,000 steps at 2 fs.
+
+    state            E_tot drift   sd     step sd / max   T       closest L-w contact r/r0   FIRES U_F max
+                     kJ/mol/ps     kJ/mol kJ/mol          K       min / p1 / p50
+    pure MM          +0.27         2.17   0.57 / 3.4      298.2   1.00 / 1.02 / 1.23         --
+    q 1.0 (l = 1)    +0.05         2.46   0.79 / 4.6      302.1   1.18 / 1.18 / 1.26         14.8
+    q 1.5 (l = 0.5)  +2.02         2.25   0.86 / 6.4      305.7   1.17 / 1.17 / 1.25         12.3
+    q 2.0 (l = 0+)   NaN during Langevin
+
+(The float32 resolution of E_bb at 6.6e4 eV is 0.75 kJ/mol, a floor for
+every ML state's per-step jumps. The step time is 164-167 ms in Langevin;
+the 345-353 ms in NVE includes one extra energy evaluation per step for the
+record.)
+
+At lambda = 1 and 0.5, E_tot behaves as in pure MM: the same sd, and a drift
+of 0.05-2 kJ/mol/ps over 2 ps. The 1 fs comparison and q 2.5 / 3.5 were not
+reached, because the driver stops on the first error.
+
+**The q = 2.0 NaN, diagnosed** (`diag_q.py`, reproduced at step 150;
+`diag_parts.py` on the last good state at step 140, float64):
+
+                         truth      sum c = sumD + cross       r = truth - sum c   (kJ/mol, ML region)
+    start (frame 0)      -125.5     -140.9 = -114.8 - 26.1       +15.4
+    step 140             +1,902     +3,145 = +3,193 - 47         -1,243
+
+- **Who is crushed.** The four largest c_i belong to ligand H atoms. Each has
+  the closest water atom at 1.11-1.25 A, and 3-5 waters within 2.5 A.
+- **Why.** The backbone sees strong repulsion there, and the head's pair
+  term sees much more. At lambda = 0+, U = E_bb(L) + E_bb(I) + r, so a
+  water that moves in lowers U: r is a well, and it deepens without bound.
+- **Not the explicit Coulomb.** The cross term barely moves.
+- **Why the wall did not stop it.** For ligand H the wall is thin: H-Ow
+  1.32 A, H-Hw 1.18 A.
+
+**Single-water remainder scans** (`experiments/2026-10-15_remainder_scan/scan_r.py`,
+the S13.30 geometry, operating head with es, float64, 26 scans): r falls
+1 kT below its starting value at d_min 1.0-1.66 A. The latest onset is
+ligand H against water O at 1.66 A. Further in, r drops by hundreds to
+thousands of kJ/mol, with inward pulls of 1e3-1e6 kJ/mol/A.
+
+**Training-label coverage** (`cluster_contacts_lampool.py`: the operating
+head's 2,474 ligand clusters on lampool400; shortest contact per cluster):
+
+    pair   min    p1     |  DES370K p1 (the current r0)
+    C-Ow   2.69   2.83   |  2.38
+    C-Hw   1.77   2.00   |  1.83
+    N-Ow   2.62   2.69   |  2.21
+    N-Hw   1.69   1.78   |  1.39
+    O-Ow   2.46   2.53   |  2.14
+    O-Hw   1.54   1.60   |  1.32
+    H-Ow   1.66   1.69   |  1.32
+    H-Hw   1.39   1.46   |  1.18
+
+**Reading.** At lambda = 0+ the only ML ligand-water term left is r, which
+contains the backbone's truth. So r can be trusted only as far as the
+backbone-labelled clusters reach. The dimers' CCSD(T) coverage does not help
+there. The single-water onset (H-Ow 1.66 A) sits at the cluster minimum for
+H-Ow (1.66 A). D15's first radius, DES370K p1, lies inside that range for
+every pair except C-Hw. A revised radius is asked for (2026-10-15).
+
+**Revised radii, same failure** (`diag_q.py`, q = 2.0, 2026-10-15, radii as
+in the revised D15). NaN at step 140. By step 120 a ligand H was at
+0.71 r0 from an inner water O (1.18 A) and T had reached 1,132 K. The MM
+(wall) force on that H was 30,000 kJ/mol/A and sum c was +1,244 kJ/mol. The
+wall pushes, but at eps_w = 25 kJ/mol the remainder's pull wins. A
+much stiffer wall would bring back the 2 fs stability problem of S13.38, on
+H again. Two patches in a row have failed, so the next step goes back to the
+design (S3), which allows any c: see the question of 2026-10-15.
+
+**The S3 cover switch** (user, 2026-10-15; `lambda_mask.cover_switch`,
+`COVER_R` = the training-cluster minima above, delta = 0.2 A, smoothstep).
+Each ligand-environment D_ia is multiplied by s(r_ia); the explicit Coulomb
+is not switched. Checks (`check_cover.py`, float64):
+- The start frame has no pair below r_cov, so sum c is unchanged.
+- Forces vs FD on atoms with a pair in the switch zone: 3e-5 eV/A.
+- dU/dp vs FD: to 1e-8.
+- The endpoints p = 0 and 2 are bit-identical with and without the switch.
+
+**It does not stop the runaway** (`diag_q.py`, q = 2.0, revised wall +
+switch). The run reached step 320 before the NaN, against 140-150 before.
+The contacts stayed at 0.93-0.98 r0, within or at the edge of coverage, yet
+sum c rose 243 -> 524 -> 1,812 kJ/mol. At the last good state
+(`diag_parts_cover.log`): truth +696, sum c +1,812 (sumD +1,820, cross -9),
+r = -1,116 kJ/mol. A single ligand H carries c_i up to 217 kJ/mol, with 4-6
+waters within 2.5 A and the nearest at 1.39-1.42 A.
+
+**Mechanism.** At lambda -> 0+ the ligand barely attracts water, so water
+packs against the wall all round it. That crowded many-body environment is
+outside the head's training, and its c overshoots the backbone's own
+coupling. Since U = E_bb - (1 - lambda) sum c, every overshoot lowers U and
+packs the shell tighter. A per-pair distance switch cannot catch this.
+Asked 2026-10-15: bound the attributed coupling (S3).
+
+**The S3 backbone cap** (D17, user 2026-10-15; `anchored_energy(cap=m)`,
+m = 0.5 eV, tau = 0.025 eV, on top of the cover switch).
+
+Checks (`check_cap.py`, float64):
+- The start frame is unchanged: -140.95 kJ/mol.
+- On the two crushed states, r goes from -477 and -196 kJ/mol to -48.2
+  kJ/mol = -m.
+- Forces vs FD with the cap active: 1.0e-4 eV/A (|F| 2.3).
+- dU/dp vs FD: to 2e-8.
+- The endpoints are bit-identical.
+
+**Dynamics** (`diag_q.py`, q = 2.0, revised wall + switch + cap): stable
+for 1,000 steps (2 ps), the end of the test. T stayed at 296-308 K and the
+closest contact at >= 0.96 r0. Sum c peaked at 373 kJ/mol and relaxed back
+to about 0. The step took 0.36 s with diagnostics, against 0.165 s before
+the cap; a clean timing comes from E7. E7 was rerun with all three changes
+(earlier outputs kept as `*_v0`).
+
+
+### 13.42 E7 rerun (revised wall + cover switch + backbone cap): every state stable; lambda = 0+ drifts +4-6 kJ/mol/ps
+
+`run_e7.sh` on workstation B (RTX 2080 Ti), 2026-10-15 10:11-11:59, with
+the revised D15 radii, the cover switch and the backbone cap (D17,
+m = 0.5 eV), eps_w = 25 kJ/mol, alpha = 0.5. The setup is as in S13.41:
+thermal200 frame 0, Langevin for 500 steps, then NVE for 1,000 steps at
+2 fs. The q 1.5 dt1 state runs 1,000 + 2,000 steps at 1 fs. Summary:
+`e7_summary.py` -> `e7_summary.log`.
+
+    state            dt   E_tot drift  sd      step sd / max  T      closest L-w r/r0   FIRES U_F max,
+                     fs   kJ/mol/ps    kJ/mol  kJ/mol         K      min / p1 / p50     violations max
+    pure MM          2    -0.36        2.15    0.59 / 3.5     302.0  0.97 / 0.98 / 1.06  --
+    q 0.0 (W1 s_w 0) 2    +2.46        2.08    0.83 / 4.9     304.3  0.98 / 0.99 / 1.07  14.5, 6
+    q 1.0 (l = 1)    2    +2.75        2.25    0.84 / 4.5     302.3  1.00 / 1.00 / 1.10   6.9, 10
+    q 1.5 (l = 0.5)  2    -0.13        2.17    0.78 / 3.6     300.6  0.99 / 1.01 / 1.07   8.8, 9
+    q 1.5 (l = 0.5)  1    -0.27        1.97    0.60 / 3.2     302.9  0.99 / 1.00 / 1.10   7.6, 6
+    q 2.0 (l = 0+)   2    +5.85        3.17    0.87 / 5.7     302.5  0.92 / 0.93 / 0.97   7.9, 5
+    q 2.5 (cut)      2    +3.89        2.17    0.83 / 6.3     301.5  0.93 / 0.93 / 0.97  17.4, 6
+    q 3.5 (W3 s_w .5) 2   +0.32        2.05    0.74 / 4.4     302.5  0.80 / 0.81 / 0.90   8.9, 7
+
+(r/r0 uses the revised wall radii in every state, pure MM included. The
+contacts at lambda = 1 sit at 1.00 r0 because the revised radii are at the
+edge of the 298 K contacts.)
+
+- **No NaN in any state**, including lambda = 0+ (q 2.0) and the cut
+  (q 2.5), which failed before the cap (S13.41).
+- **The sd and the step jumps are at the MM level.** The sd is 2.0-2.2
+  kJ/mol in every state except q 2.0 (3.2, 1.5x MM). The per-step sd is
+  0.74-0.87 against 0.59 for MM, and the largest step is 6.3 against 3.5.
+  The float32 floor of E_bb (0.75 kJ/mol) is of the size of that excess.
+  There is no step of tens or hundreds of kJ/mol, which a jump in U would
+  give.
+- **The dt test cannot tell here.** At q 1.5, going 2 fs -> 1 fs changes
+  the sd by 1.11x and the per-step sd by 1.31x, not the ~4x of an
+  integration error. The fluctuation is set by something that does not
+  scale with dt. The pure-MM sd is the same size, so it is not ML-specific.
+  The cause has not been looked at (candidates: SETTLE / constraint
+  tolerance, PME, the float32 floor). Pure MM was not run at 1 fs.
+- **Drift.** Re-running a state shows how noisy a 2 ps drift is: q 1.0 went
+  +0.05 -> +2.75 and q 1.5 +2.02 -> -0.13 kJ/mol/ps between S13.41 and here
+  (different radii, but a stable state), and the two halves of one run
+  differ by up to 3.4 (q 1.5: +0.9 / -2.5). So |drift| <= ~3 kJ/mol/ps is
+  within run-to-run noise. q 2.0 and q 2.5 (lambda = 0+) lie above it.
+  - q 2.0: +5.9 kJ/mol/ps; both halves are positive (+9.9 / +6.1);
+    E_tot(2 ps) - E_tot(0) = +11.3 kJ/mol.
+  - q 2.5: +3.9 kJ/mol/ps (halves +1.6 / +6.9); end - start = +11.3 kJ/mol.
+
+  Over 2 ps that is 11 kJ/mol in a 4,076-atom box. Under the Langevin
+  thermostat of production it is absorbed. The cause is not identified. The
+  candidates are the stiff parts that are active only at lambda = 0+: the
+  smooth-min of the cap (tau = 0.025 eV), the cover switch (0.2 A
+  smoothstep) and the wall, against which the waters press (0.92 r0). A
+  1 fs run at q 2.0 would separate integration error (drift / 4) from a
+  non-conservative force (drift unchanged). Not run.
+- **eps_w.** At lambda = 0+ the closest contact stays at >= 0.92 r0 (p1
+  0.93) with eps_w = 25 kJ/mol, so 25 meets the S6.3.3 criterion
+  (>= ~0.9 r0). Smaller values were not tried, so it is not shown to be the
+  smallest. One 2 ps run from one start frame.
+- **W1 by FEP from q 0.0** (101 samples, every 20 fs of the 2 ps NVE):
+  dG_W1 = +0.006 kJ/mol. 4.0% of the samples have U_wall(s_w = 1) > 0, and
+  the largest is 0.29 kJ/mol (0.12 kT), so one FEP step has full overlap.
+  At lambda = 1 with the revised radii, W1 is ~0 after all. These samples
+  are correlated, and this is a single start.
+- **FIRES** holds in every state: U_F <= 17.4 kJ/mol, at most 10 violating
+  pairs at any sample.
+- **Step time** (2080 Ti, smoke only; production is the RTX 5090): the
+  Langevin step is 303-312 ms in every ML state, against 164-167 ms before
+  the cap (S13.41). The cap costs about +140 ms per step for the two extra
+  fragment backbone calls. The NVE step (633-656 ms) includes the
+  per-step energy record. Pure MM is 0.2 ms.
+
+**q 2.0 at 1 fs** (workstation C, `e7_nve.py 2.0 e7_q2.0_dt1.npz 1000 2000
+1.0`, same start and seed, 2026-10-15). It separates integration error
+(the excess shrinks with dt) from a non-conservative force (it does not):
+
+    state          dt   drift      halves         end - start   sd     step sd / max   contact min
+                   fs   kJ/mol/ps  kJ/mol/ps      kJ/mol        kJ/mol kJ/mol          r/r0
+    q 2.0          2    +5.85      +9.9 / +6.1    +11.3         3.17   0.87 / 5.7      0.92
+    q 2.0          1    +1.83      +3.0 / +4.0     +6.0         1.92   0.51 / 3.7      0.91
+    q 1.5 (ref)    2    -0.13      +0.9 / -2.5     -1.9         2.17   0.78 / 3.6      0.99
+    q 1.5 (ref)    1    -0.27      +0.1 / -0.9     +2.4         1.97   0.60 / 3.2      0.99
+
+- At 1 fs the q 2.0 sd (1.92) is back at the MM level. 2 fs -> 1 fs shrinks
+  the q 2.0 sd 1.65x, against 1.11x at q 1.5, so the q 2.0 excess scales
+  with dt.
+- The drift falls 3.2x (5.85 -> 1.83), near the dt^2 ratio of 4. At 1 fs it
+  is inside the run-to-run noise (~3 kJ/mol/ps).
+- **Reading.** This points to integration error from a stiff term active at
+  lambda = 0+, not a non-conservative force. It is not conclusive: one run
+  per dt, and the drift difference (4 kJ/mol/ps) is about the size of the
+  noise. Which term is stiff (the cap's smooth-min, the cover switch, or the
+  wall) is not separated.
+- Step time on workstation C's 2080 Ti: 321 ms Langevin, 664 ms NVE (with
+  the record), the same as workstation B.
+
+### 13.43 Route step 1: the lambda = 0+ drift is integration error, the forces are right; the cap and switch act all the time at lambda = 0+
+
+`experiments/2026-10-15_lambda0_dt/` (`paired_dt.py`, `fd_check.py`,
+`run_step1.sh`), workstation B, 2026-10-15. Production settings as in
+S13.42. One Langevin run gives one state: thermal200 frame 0, 500 x 2 fs,
+seed 7. From that same state, NVE runs 2 ps at 2 fs and at 1 fs. Records
+every 10 fs.
+
+    state         dt   drift kJ/mol/ps (halves)   end-start  sd     T
+    q 2.0 (l 0+)  2    +4.13 (+6.70 / -0.50)       +4.27      2.77   298.4
+                  1    +0.93 (+0.45 / +0.96)       +2.24      1.72   300.1
+    q 2.5 (cut)   2    -2.91 (-8.98 / +3.36)       -3.35      2.81   301.9
+                  1    +0.57 (+0.85 / +3.59)       +1.35      2.04   301.3
+
+- At q 2.0 the drift falls 4.4x and the sd 1.6x from 2 fs to 1 fs.
+- At q 2.5 the 2 fs drift changes sign between halves, so it is within
+  the noise; the sd falls 1.4x.
+- With S13.42 (unpaired, q 2.0: 5.85 -> 1.83), both comparisons point the
+  same way: the lambda = 0+ excess scales with dt.
+
+**Forces against the energy gradient** (`fd_check.py`). Float64 throughout
+(model on the CPU, OpenMM CUDA double). Frames: three per state from the 2 fs
+run (largest cap excess, most switch-zone pairs, closest contact). On each,
+the 8 atoms of the pairs with the smallest r / r0, x/y/z, central
+differences at h = 1e-3 and 5e-4 A.
+- ML + FIRES group: max |F - FD| 4.5-5.8e-3 (h 1e-3) -> 1.2-1.4e-3 (h
+  5e-4) kJ/mol/A, with |F| up to 202. The ~4x drop is the h^2 truncation.
+- Wall group: 1.7-6.5e-3 -> 0.4-1.6e-3, with |F| up to 231.
+- Total U: the same, except 5 of 12 (frame, h) cases at 4.88 kJ/mol/A,
+  doubling to 9.75 when h halves in one frame. That is a fixed energy step
+  of 4.88 x 2h = 0.0098 kJ/mol, outside the ML and wall groups.
+  - Its size is that of one water O-H pair crossing the 1.0 nm cutoff of
+    the PME direct sum without switching: 0.834 x 0.417 x 138.9 x
+    erfc(alpha r_c) ~ 0.0094 kJ/mol at tolerance 5e-4.
+  - The prepared MM leg has no switching, so pure MM has the same steps.
+    They may be the dt-independent NVE floor of S13.42 (pure MM sd 2.1);
+    not tested.
+- **Reading**: the forces of every ML/MM-specific term (ML, cap, cover
+  switch, FIRES, wall) are the gradient of the energy. The lambda = 0+ drift
+  at 2 fs is integration error from stiff terms, not an implementation error.
+
+**The D17 terms at lambda = 0+** (every 10 fs, both runs per state):
+
+    state   cap excess kJ/mol p50 / p90 / max   samples > 1 kT   sum c p50   truth p50   samples with a pair in the switch zone (max pairs)
+    q 2.0   2.4-2.7 / 10.0-10.5 / 23-29          48-52%           207-233     161-185     83% (7-9)
+    q 2.5   0.0-0.3 / 3.2-7.6 / 21-32            13-27%           315-417     287-372     96-99% (10-13)
+
+- At lambda = 0+, sum c sits about m (48 kJ/mol) above truth.
+- About half the samples at q 2.0 lose more than 1 kT to the cap.
+- Nearly every sample has ligand-water pairs inside the cover switch,
+  because the waters press on the wall and `COVER_R` ~ `WALL_R0`.
+- What this means:
+  - D17 is not a rarely active guard at lambda = 0+; it reshapes c there.
+  - What it removes goes to dG_cut, not to atoms.
+  - The head overshoots in the confined lambda = 0+ shell. That is the
+    case for clusters from real ML/MM window frames (STATUS item 4).
+  - The cap's firing rate is a Stage A report item (S8 route).
+- Step time with these records: Langevin 508 ms, NVE 557-614 ms per step,
+  two chains sharing one 2080 Ti.
+
+### 13.44 Acetamide solvent leg (Stage A, D8) and its MM hydration free energy
+
+`experiments/2026-10-15_acetamide_leg/`.
+
+**The leg** (`prep_acetamide.py`, workstation C, 2026-10-15).
+- Why built here: ABFE_IBS builds a solvent leg only from a complex, so
+  it was built directly in OpenMM.
+- Settings, matching the Atenolol leg: PME, 1.0 nm cutoff, Ewald
+  tolerance 5e-4, dispersion correction, no switching, HBonds + rigid
+  TIP3P, standard masses, no ions; 298.15 K.
+- Ligand: GAFF2 (gaff-2.11) with AM1-BCC charges (openmmforcefields +
+  AmberTools sqm), net charge 6e-17 e, residue MOL, first in the topology.
+- Box: 875 waters, 2,634 atoms. NPT 1 ns (1 bar) -> mean volume of the
+  second half 26.64 +- 0.21 nm^3 -> fixed cubic L = 29.87 A -> 100 ps NVT.
+- Files: `system_solvent.xml`, `topology_solvent.cif`, `em_acetamide.npz`
+  (E3D leg format).
+
+**MM dG_decouple** (`abfe_mm.py`, `run_mm.sh`, workstation A, 2026-10-15/16,
+3 independent reps in parallel on one 2080 Ti, 4.6 h).
+- Decoupling (couple-intramol = no).
+  - Electrostatics: ligand charges x lambda_elec by NonbondedForce
+    offsets; ligand-ligand pairs kept by exceptions.
+  - Sterics: ligand-water LJ by a Beutler softcore (alpha 0.5) with the
+    long-range correction.
+  - At lambda = 1 it matches the reference System to 0.01 kJ/mol, forces
+    to 0.0014 kJ/mol/nm.
+- 11 electrostatic + 20 steric states; 100 ps equilibration + 1 ns per
+  state, sampled every 1 ps. MBAR after subsampling each state by its
+  statistical inefficiency.
+
+    rep    dG_decouple       elec      vdW      samples/state   min adjacent overlap
+    1      +33.90 +- 0.24    +41.45    -7.55    436-1000        0.087
+    2      +34.05 +- 0.23    +41.45    -7.40    519-1000        0.057
+    3      +34.18 +- 0.24    +41.75    -7.57    465-1000        0.090
+    mean   +34.04 +- 0.14 (SD over reps)  +41.55 +- 0.17  -7.51 +- 0.09   (kJ/mol)
+
+- **What the number is for.** It is the MM control for Stage A's total
+  (S7.2): a comparison, not a gate, since the Hamiltonians differ.
+- The rep-to-rep SD (0.14) agrees with the per-rep MBAR error (0.23-0.24).
+- Experiment: dG_hyd = -9.71 kcal/mol, i.e. +40.6 kJ/mol in the
+  decoupling sign (FreeSolv) [not verified; from memory]. GAFF2 / AM1-BCC
+  is 6.6 kJ/mol less favourable.
+- **Differences from the IBS solvent legs**
+  (`REF_solvent_legs_from_ABFE_IBS_2026-10-15.md`): 298.15 K, not 300 K;
+  standard masses, not HMR; no salt; plain softcore MBAR, not the IBS
+  26-state stage 2.
+- Speed: 177-180 ns/day per rep, with three reps on one GPU and the u_kn
+  evaluation included.
+
+### 13.45 Full ML/MM step time (route step 2): RTX 5090 91 / 119 / 200 ms at n = 20 / 50 / 100
+
+`experiments/2026-10-16_5090_timing/time_step.py`, workstation C
+(RTX 2080 Ti, smoke only), 2026-10-16. Production defaults of
+`build_mlmm_system` (revised D15 radii, cover switch, cap, eps_w 25); head in
+float32 on the GPU; LangevinMiddle at 2 fs; 50 timed steps after 20 warm-up
+steps, with no energy records. "ML call" is one `MLMMForce.evaluate`
+(ML + FIRES) on its own.
+
+    case                        ms/step   ns/day   ML call ms
+    pure MM (4,076 atoms)        0.20     850      --
+    n 20 (101 ML atoms), q 1.5   322      0.54     335
+    n 20, q 2.5 (cut)            319      0.54     323
+    n 50 (191 ML atoms), q 1.5   465      0.37     472
+    n 50, q 2.5                  471      0.37     477
+
+The step is the ML call, and the MM part does not show. The cut state costs
+no more than W2, because the cap already evaluates both fragments.
+
+**RTX 5090** (PBS node P4, the production GPU, 2026-10-16, same
+script, 200 timed steps, OMP 8 threads; the user's run):
+
+    case                        ms/step   ns/day   ML call ms   vs 2080 Ti
+    pure MM                      0.09     1,889    --           2.2x
+    n 20 (101 ML atoms), q 1.5   90.7     1.91     99.8         3.5x
+    n 20, q 2.5                  90.9     1.90     97.4         3.5x
+    n 50 (191 ML atoms), q 1.5   119.2    1.45     124.6        3.9x
+    n 50, q 2.5                  118.9    1.45     126.1        4.0x
+    n 100 (341 ML atoms), q 1.5  200.4    0.86     206.6        --
+    n 100, q 2.5                 200.7    0.86     207.7        --
+
+- **Scaling with the ML region.** 101 -> 191 -> 341 ML atoms (x1.9, x3.4)
+  costs x1.31 and x2.21 in time. A line through n = 20 and 100 gives
+  ~45 ms per step fixed plus ~0.46 ms per ML atom; n = 50 sits 13 ms below
+  it.
+  - So at n = 20 about half the step does not scale with the region: graph
+    build, Python, and three backbone calls (full, plus two fragments for
+    the cap), each small.
+  - At these sizes the GPU is not filled by one replica. Batching several
+    HREMD replicas into one ML call is therefore the first speed lever for
+    `--mode mlmm`. Not measured.
+- **Budget at n = 20**: 1.9 ns/day per replica. 100 ps per window at 2 fs
+  is 1.26 GPU-h; a ~20-window solvent leg (W1, ~12 W2, 4-8 cut, a few W3)
+  is ~25 GPU-h run one replica at a time. Acetamide has fewer ML atoms
+  (9 + 60) and was not timed.
+
+### 13.46 `run_abfe.py --mode mlmm`: the full path on one HREMD ladder; exact checks and smoke
+
+`decomp/mlmm_hremd.py` (new) and `run_abfe.py --mode mlmm`, 2026-10-16
+(route step 2).
+
+**How it works.**
+- One OpenMM replica per path state q (W1 | W2 | cut | W3, S6.3.4).
+  - Each replica is built from the same start frame, so the inner waters
+    are the same in all of them; the build checks this.
+  - Neighbour swaps exchange positions and velocities.
+- One ML forward per configuration gives the energy at every state. E_bb,
+  the capped S_eff = sum c and the fragment sum U0 do not depend on q:
+  - W1: U_ML = E_bb.
+  - W2: E_bb - (q - 1) S_eff.
+  - cut: (1 - s)(E_bb - S_eff) + s U0.
+  - W3: U0.
+- The MM part per configuration:
+  - NonbondedForce: three PME evaluations, because it is exactly quadratic
+    in the common lambda;
+  - L-O LJ: linear in lambda;
+  - wall: one evaluation per distinct s_w.
+
+  So a full u_kn row costs one ML forward, and the swaps use the same rows.
+- dU/dq per segment, in closed form, from the same parts. Boundary states
+  carry both one-sided values.
+- Per-atom terms:
+  - W2: the ML c_i, the MM Coulomb per atom (exact central differences)
+    and the L-O LJ pair sum per atom. The LJ long-range correction is split
+    by sum 4 eps sigma^6; the total is OpenMM's.
+  - W1 / W3: the wall's dU/ds_w per atom.
+- The evaluator context runs at double precision (MM only).
+- Checkpoint every iteration; a rerun resumes.
+- Analysis: TI per segment, per-atom TI, and MBAR over all states.
+
+**Exact checks** (`experiments/2026-10-16_mlmm_hremd/check_mlmm_hremd.py`).
+Float64 throughout (model on the CPU, OpenMM CUDA double), 12 states. Two
+frames: thermal200 frame 0, and the q 2.0 frame with the largest cap excess
+from S13.43.
+- [1] all_states against the full Context energy at each q:
+  1.1-1.4e-5 kJ/mol, with |U| ~ 6.4e6.
+- [3] Per-atom sums against their totals: <= 2.4e-4 kJ/mol over 11
+  (state, segment) pairs on each frame, the cap active on the second.
+- [2] dU/dq against a finite difference in q:
+  - W1, cut and W3: <= 5.8e-3 kJ/mol.
+  - W2: 0.8 kJ/mol with a one-sided h = 1e-4. That miss is the noise of
+    the double-precision PME energy (~5e-5 kJ/mol over h).
+    `diag_w2_fd.py`: the NB-group slope converges 23.99 -> 24.76 ->
+    24.79 for h = 1e-4 / 1e-3 / 1e-2. The total converges to the closed
+    form, 253.914 vs 253.918. The ML and LJ slopes are exact at every h.
+
+**Smoke** (workstation C, 2080 Ti, float32). Atenolol, 7 states
+(--w1 2 --w2 3 --cut-windows 2 --w3 2), 1 + 2 iterations of 10 steps.
+- It runs, checkpoints and resumes (`resumed at iteration 2`). MBAR runs
+  with pymbar's JAX on the CPU; on the GPU it ran out of memory next to
+  torch.
+- Per-atom + cut = total: 0.000 kJ/mol.
+  - Before that fix it was -0.2: S_eff was taken as E_bb - U_plus, which
+    float32 resolves to 0.75 kJ/mol. Now it is sum_c.
+- The free energies of this smoke (20 fs per state) mean nothing.
+- One iteration of 7 replicas x 10 steps took 26-31 s.
+  - Stepping is ~22 s at 0.32 s per step.
+  - The rest is the u_kn rows and the per-atom terms, about 0.6-1.2 s per
+    replica.
+
+### 13.47 Pilot ladder on the RTX 5090 (Atenolol, n = 20): two gaps, at lambda -> 0 and at the end of W3
+
+`run_abfe.py --mode mlmm` on PBS node P4 (RTX 5090), 2026-10-16
+13:47-17:47, the user's run.
+- Ladder: 26 states (--w1 2 --w2 12 --cut-windows 8 --w3 6).
+- Sampling: 4 + 20 iterations of 250 steps x 2 fs, so 10 ps per state
+  after equilibration and 20 samples per state.
+- Start: thermal200 frame 0, operating head.
+- Diagnostics: `experiments/2026-10-16_mlmm_pilot/pilot_analysis.py` ->
+  `pilot_analysis.log`.
+
+**Cost.** An iteration took 587-595 s, and 26 x 250 x 91 ms = 592 s. The
+u_kn rows, derivatives and per-atom terms add almost nothing. The step
+time is as in S13.45.
+
+**Overlap.** The MBAR nearest-neighbour overlap is 0.13-0.33 for 23 of the
+25 pairs, and swaps are accepted on all of those. Two pairs fail:
+
+    pair                         swaps   NN overlap   reverse work mean / sd (kT)
+    q 1.909 - 2.000 (W2, l 0.09 -> 0)    0/15    0.020        +7.5 / 3.4
+    q 3.800 - 4.000 (W3, s_w 0.2 -> 0)   0/9     0.000      +153 / 12.6
+
+**<dU/dq> profiles** (kJ/mol per unit q; naive SE from 20 samples):
+- W2 falls smoothly from +315 (lambda = 1) to +82 (lambda = 0.09), then
+  jumps to -204 +- 21 at lambda = 0.
+  - At lambda = 0 the waters press on the wall. The capped coupling sum c
+    is then repulsive, about +200 kJ/mol (cf. S13.43), so the integrand
+    turns over in the last 0.09 of lambda.
+  - That interval carries 41% of the W2 variance, and its trapezoid is not
+    reliable.
+- cut: +45 down to -57 at s = 1. Smooth, and the overlap is fine
+  throughout.
+- W3: -17 to -76 at s_w = 0.2, then -833 +- 16 at s_w = 0.
+  - That last interval alone gives (-76 - 833) / 2 x 0.2 = -91 of the
+    -115 kJ/mol.
+  - At s_w = 0 water fills the cavity, and those configurations cost
+    +153 kT at s_w = 0.2: the alpha = 0.5 softcore does not bridge the
+    last step.
+
+**Totals of this pilot** (not results: two gaps, 10 ps per state).
+
+    dG_W1 +0.16   dG_W2 +160.66   dG_cut +23.40   dG_W3 -115.26   ->  TI +68.96, MBAR +59.96 kJ/mol
+    per-atom: W1 +0.16, W2 ML +62.66, W2 MM Coulomb +15.38, W2 MM LJ +82.61, W3 wall -115.26
+    per-atom sum + cut = TI total to 0.000
+
+- TI and MBAR differ by 9 kJ/mol, which is the two gaps.
+- The cut is 23 of ~65 kJ/mol, about a third of the total, and is not
+  attributed. This is the Stage A report item. Part of it is the cap's
+  excess (S13.43).
+- The per-atom MM Coulomb ranges from -54 to +64 kJ/mol over atoms and sums
+  to +15: the charged groups cancel.
+
+**What this sets for the production ladder:**
+- W2 needs states packed towards lambda = 0.
+- W3 needs states packed towards s_w = 0, or a softer wall softcore, or
+  both.
+- W1 (overlap 0.33, +0.16 +- 0.16) and the cut (>= 0.15) are adequate as
+  spaced.
+
+**Against the MM number** (2026-10-16). The only MM reference for this leg is
+ABFE_IBS's `Atenolol-rank11/output/final_binding_results.json`:
+`solvent_delta_G_kJ_mol` = +152.05 [not verified]. It is an old run, and its
+own diagnostics flag `stage2_lambda_endpoints.ok = False`. The pilot gives
++60 (MBAR) to +69 (TI), about 85 kJ/mol less.
+
+Is the cycle wrong? This run cannot say. The local checks hold:
+- every segment's energy and derivative matches direct evaluation (S13.43,
+  S13.46);
+- the per-atom terms close.
+
+The review of 2026-10-16 tightened two claims made here earlier. The
+decoupled end is not a defined reference state (S7.2: hybrid water
+partitioned around a ghost ligand that FIRES still couples to the waters).
+And "anchored is exact" covers the head, not the endpoint or n (S3 scope
+note). So the 85 kJ/mol can come from four places, which this run cannot
+separate:
+1. **Numerics**: the two gaps above. The last W3 interval alone gives -91
+   kJ/mol, and that trapezoid is not reliable. MBAR's error is NaN.
+2. **The endpoint**: the undefined solvent-reorganisation term of the ML
+   droplet around the ghost (S7.2, D18).
+3. **The Hamiltonian**: ML vs GAFF2/TIP3P near the ligand.
+4. **The implementation of the path as a whole**: wall, refill and FIRES.
+
+The +60 to +69 is a diagnostic output, not a result. It neither supports
+dropping the anchored scheme or the backbone, nor reads as "ML vs GAFF2
+physics".
+
+The order agreed with the user (2026-10-16), one check at a time:
+1. Fix the target reference state (D18). Done: (a), bulk MM water (S7.2).
+2. Run the path-only control with matched ends (S7.2), which decides
+   item 4.
+3. Pack states into the two gaps, judged by overlap, independent repeats
+   and block convergence, which decides item 1.
+4. Only then discuss the total and the per-atom terms.
