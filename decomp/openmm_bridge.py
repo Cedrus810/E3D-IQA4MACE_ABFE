@@ -137,10 +137,19 @@ class AnchoredForce(AlchemicalForce):
     """
 
     def __init__(self, model, numbers, frag_id, es=False, charge=0,
-                 ligand_charge=0, multiplicity=1, ligand=0, device=None):
+                 ligand_charge=0, multiplicity=1, ligand=0, device=None, cover=None,
+                 cap=None):
+        """cover: None, or a {(Z_lig, Z_env): r_cov} table (lambda_mask.COVER_R)
+        for the S3 cover switch on the head's pair terms. cap: None, or the
+        margin m (eV) of the S3 backbone cap on the attributed coupling."""
         super().__init__(model, numbers, frag_id, mode="anchored", charge=charge,
                          multiplicity=multiplicity, ligand=ligand, device=device)
         self.es = es
+        self.cap = cap
+        from .lambda_mask import COVER_DELTA, cover_table
+        self.cover = None if cover is None else (
+            torch.as_tensor(np.asarray(numbers), dtype=torch.long, device=self.device),
+            cover_table(cover, device=self.device), COVER_DELTA)
         self.charges = (ligand_charge, charge - ligand_charge)
         self.set_lambda(0.0)
 
@@ -157,7 +166,7 @@ class AnchoredForce(AlchemicalForce):
         from .lambda_mask import anchored_energy
         return anchored_energy(self.model, data, lam, self.frag_id,
                                ligand=self.ligand, es=self.es, cut=self.cut,
-                               charges=self.charges)
+                               charges=self.charges, cover=self.cover, cap=self.cap)
 
     def torch_energy(self, p):
         data = self._graph(p.detach().cpu().numpy())

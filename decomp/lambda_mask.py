@@ -23,6 +23,29 @@ Three modes, because they give DIFFERENT endpoints:
 
 import torch
 
+# Coverage of the operating head's many-body labels (v3 S13.41, S3 cover
+# switch, user 2026-10-15): the shortest contact per (ligand element,
+# environment element) in its 2,474 backbone-labelled ligand clusters
+# (lampool400). Below it the head's pair terms are unsupported, and at
+# lambda = 0+ their excess over the backbone became a well (S13.41). Angstrom.
+COVER_R = {(1, 8): 1.66, (1, 1): 1.39, (6, 8): 2.69, (6, 1): 1.77,
+           (7, 8): 2.62, (7, 1): 1.69, (8, 8): 2.46, (8, 1): 1.54}
+COVER_DELTA = 0.2
+
+
+def cover_table(cover, device=None, zmax=118):
+    """{(Z_lig, Z_env): r} -> [zmax+1, zmax+1] tensor; 0 where absent (switch off)."""
+    t = torch.zeros(zmax + 1, zmax + 1, dtype=torch.float64, device=device)
+    for (a, b), r in cover.items():
+        t[a, b] = r
+    return t
+
+
+def cover_switch(r, r_cov, delta=COVER_DELTA):
+    """1 for r >= r_cov, 0 for r <= r_cov - delta, smoothstep (C1) between."""
+    x = ((r - (r_cov - delta)) / delta).clamp(0.0, 1.0)
+    return x * x * (3 - 2 * x)
+
 
 def lambda_edge_weight(lam, frag_id, edge_index, ligand=0):
     """Per-edge coupling factor.
@@ -133,7 +156,7 @@ def _fragment(data, frag_id, which, charge):
 
 
 def anchored_energy(model, data, lam, frag_id, ligand=0, es=False, cut=None,
-                    charges=(0, 0)):
+                    charges=(0, 0), cover=None, cap=None, cap_tau=0.025):
     """The anchored Hamiltonian of RESEARCH_PLAN_v3.md S3, one graph.
 
         U(R, lambda) = E_bb(R) - sum_{i in L} (1 - lambda_i) c_i(R)        lambda > 0, full graph
@@ -152,7 +175,23 @@ def anchored_energy(model, data, lam, frag_id, ligand=0, es=False, cut=None,
     times (1 - mean lambda) carries all of it, with zero value.
 
     charges = (ligand, environment) total charges for the fragments at
-    lambda = 0. Returns (U [1], c [n_nodes], parts dict).
+    lambda = 0. cover = (numbers [n_nodes] tensor, r_cov table [Zmax+1, Zmax+1]
+    tensor from cover_table, delta) multiplies each ligand-environment D_ia by cover_switch(r_ia):
+    pair terms are taken only where the head's many-body labels reach (v3 S3
+    cover switch, S13.41). Exactness is untouched -- both endpoints are the
+    backbone's -- and dU/dlambda_i = c_i still holds, the switch depending on
+    R only; what the switch removes stays in the remainder, i.e. in dG_cut.
+    The explicit Coulomb (es) is not switched.
+
+    cap = m (eV) bounds the attributed coupling by the backbone's own (v3 S3
+    backbone cap, S13.41, user 2026-10-15). With truth = E_bb(R) - E_bb(R_L)
+    - E_bb(R_E) and S = sum c,
+        S_eff = smin_tau(S, softplus_tau(truth + m)),   c_i -> c_i - (S - S_eff) / N_L
+    so U(0+) >= min(E_bb(R), E_bb(R_L) + E_bb(R_E) - m) and U(lambda) cannot
+    run away below the two physical endpoints. The excess depends on R only,
+    so U stays linear in each lambda_i and dU/dlambda_i = c_i (capped) holds;
+    exactness is untouched. Costs the two fragment energies every step.
+    Returns (U [1], c [n_nodes], parts dict).
     """
     import contextlib
     from .polar_es import coulomb_cross
@@ -172,6 +211,13 @@ def anchored_energy(model, data, lam, frag_id, ligand=0, es=False, cut=None,
     src, dst = data["edge_index"]
     cross = in_L[src] != in_L[dst]
     lig_end = torch.where(in_L[src], src, dst)
+    if cover is not None:
+        z, table, delta = cover                    # table: [Zmax+1, Zmax+1] tensor, 0 = no switch
+        env_end = torch.where(in_L[src], dst, src)
+        rc = table.to(D.dtype)[z[lig_end[cross]], z[env_end[cross]]]
+        vec = (data["positions"][dst] - data["positions"][src] + data["shifts"])[cross]
+        D = D.clone()
+        D[cross] = D[cross] * cover_switch(vec.norm(dim=-1), rc, delta)
     # each unordered pair appears twice in the edge list: half to its ligand atom each time
     c = torch.zeros(len(frag_id), dtype=D.dtype, device=D.device).index_add(
         0, lig_end[cross], 0.5 * D[cross])
@@ -181,13 +227,26 @@ def anchored_energy(model, data, lam, frag_id, ligand=0, es=False, cut=None,
         x = rec["cross"].sum()
         es_grad = (1 - lam[in_L].mean().detach()) * (x - x.detach())
     w = torch.where(in_L, 1 - lam, torch.zeros_like(lam))
+    U0 = None
+    if cap is not None or cut is not None:
+        U0 = sum(bb(_fragment(data, frag_id, k, q), training=False,
+                    compute_force=False)["energy"].sum()
+                 for k, q in ((ligand, charges[0]), (1 - ligand, charges[1])))
+    parts = {"E_bb": E_bb}
+    if cap is not None:
+        truth = E_bb - U0
+        # S with the cross term's position gradient (its per-atom split has none)
+        S = (c * in_L).sum() + ((x - x.detach()) if es else 0.0)
+        tau = float(cap_tau)
+        ceiling = tau * torch.nn.functional.softplus((truth + cap) / tau)
+        S_eff = -tau * torch.logaddexp(-S / tau, -ceiling / tau)
+        excess = S - S_eff
+        c = c - torch.where(in_L, excess / in_L.sum(), torch.zeros_like(c))
+        parts.update({"truth": truth, "excess": excess})
     U_plus = E_bb - (w * c).sum() - es_grad
-    parts = {"E_bb": E_bb, "sum_c": (c * in_L).sum()}
+    parts["sum_c"] = (c * in_L).sum()
     if cut is None:
         return U_plus.reshape(1), c, parts
 
-    U0 = sum(bb(_fragment(data, frag_id, k, q), training=False,
-                compute_force=False)["energy"].sum()
-             for k, q in ((ligand, charges[0]), (1 - ligand, charges[1])))
     parts.update({"U_plus": U_plus, "U0": U0})
     return ((1 - cut) * U_plus + cut * U0).reshape(1), c, parts

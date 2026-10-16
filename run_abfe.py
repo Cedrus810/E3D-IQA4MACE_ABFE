@@ -2,6 +2,8 @@
 
 Run: python run_abfe.py --leg solvent --lambdas 12 --iters 200
      python run_abfe.py --leg complex --lambdas 16 --iters 400 --restraint boresch.json
+     python run_abfe.py --mode mlmm --leg-npz em_solvent.npz --start thermal200_solvent.npz:0 \
+         --ckpt <head.pt> --backbone <POLAR-1-M.model> --out-dir <dir>      (v3 S6.3.4)
 
 Two legs, each an HREMD ladder over the per-atom coupling:
 
@@ -21,8 +23,13 @@ ABFE machinery is borrowed.
 
 import argparse
 import json
+import os
 import pathlib
 import time
+
+# pymbar's JAX backend would preallocate most of the GPU next to torch and run
+# out of memory (seen in the mlmm smoke); MBAR at these sizes is fine on the CPU.
+os.environ.setdefault("JAX_PLATFORMS", "cpu")
 
 import numpy as np
 import torch
@@ -86,8 +93,8 @@ def build_leg(model, numbers, frag_id, positions_ang, lambdas, mode="graph",
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--leg", choices=["solvent", "complex"], default="solvent")
-    ap.add_argument("--structure", required=True,
-                    help=".npz with positions (Angstrom), numbers, frag_id")
+    ap.add_argument("--structure",
+                    help=".npz with positions (Angstrom), numbers, frag_id (modes other than mlmm)")
     ap.add_argument("--ckpt", default="ckpt/joint_organic_n50000_h256_s32000_D.pt")
     ap.add_argument("--backbone",
                     default="/home/ruigengji/MLP/mace/mace-omol-0-extra-large-4M.model")
@@ -96,11 +103,24 @@ def main():
     ap.add_argument("--iters", type=int, default=200)
     ap.add_argument("--steps-per-iter", type=int, default=500)
     ap.add_argument("--equil", type=int, default=20)
-    ap.add_argument("--dt", type=float, default=1.0)
+    ap.add_argument("--dt", type=float, default=None, help="fs; default 1.0, 2.0 for mlmm")
     ap.add_argument("--T", type=float, default=298.15)
-    ap.add_argument("--mode", choices=["anchored", "graph", "edge"], default="graph",
+    ap.add_argument("--mode", choices=["anchored", "graph", "edge", "mlmm"], default="graph",
                     help="'anchored' is v3 S3 (total from the backbone, two segments); "
-                         "'edge' is the v1 control: wrong endpoint by design (S13.7)")
+                         "'edge' is the v1 control: wrong endpoint by design (S13.7); "
+                         "'mlmm' is the full ML/MM + FIRES + wall path of v3 S6.3.4 on OpenMM")
+    g = ap.add_argument_group("mlmm (v3 S6.3.4; decomp/mlmm_hremd.py)")
+    g.add_argument("--leg-npz", default="em_solvent.npz",
+                   help="E3D leg file (positions A, numbers, resnames, resids, box A, source XML)")
+    g.add_argument("--start", default=None,
+                   help="start frame 'stack.npz:k' (also picks the inner waters); default the leg's positions")
+    g.add_argument("--n-inner", type=int, default=20, help="ML waters (FIRES n)")
+    g.add_argument("--w1", type=int, default=2, help="states on W1 incl. both ends")
+    g.add_argument("--w2", type=int, default=12, help="states on W2 incl. both ends")
+    g.add_argument("--w3", type=int, default=6, help="states on W3 incl. both ends")
+    g.add_argument("--out-dir", default=None, help="checkpoint + results; rerun to resume")
+    g.add_argument("--seed", type=int, default=0)
+    g.add_argument("--no-per-atom", action="store_true", help="skip the per-atom terms")
     ap.add_argument("--cut-windows", type=int, default=8,
                     help="anchored: windows on the cut segment (S13.25: 4-13 at n=20-100)")
     ap.add_argument("--es", action="store_true",
@@ -117,6 +137,12 @@ def main():
                     help="u_kn costs n^2 energy evaluations per recording")
     ap.add_argument("--out", default=None)
     args = ap.parse_args()
+    if args.mode == "mlmm":
+        return main_mlmm(args)
+    if args.dt is None:
+        args.dt = 1.0
+    if not args.structure:
+        ap.error("--structure is required for this mode")
 
     d = np.load(args.structure, allow_pickle=True)
     pos, numbers, frag = d["positions"], d["numbers"], d["frag_id"]
@@ -187,6 +213,40 @@ def main():
          for k, v in r.items() if k != "overlap"} |
         {"overlap_min": r.get("overlap", {}).get("min")}, indent=2))
     print(f"  -> {out}")
+
+
+def main_mlmm(args):
+    """The full ML/MM path (v3 S6.3.4): W1 | W2 | cut | W3 on one HREMD ladder."""
+    from decomp.mlmm_hremd import MLMMLadder, path_states
+    dt = 2.0 if args.dt is None else args.dt
+    leg = np.load(args.leg_npz, allow_pickle=True)
+    pos = np.asarray(leg["positions"], dtype=np.float64)
+    if args.start:
+        f, k = args.start.rsplit(":", 1)
+        st = np.load(f, allow_pickle=True)
+        pos = np.asarray(st["positions"][int(k)], dtype=np.float64)
+    qs = path_states(args.w1, args.w2, args.cut_windows + 1, args.w3)
+    out_dir = args.out_dir or f"logs/mlmm_{pathlib.Path(args.leg_npz).stem}"
+    pathlib.Path(out_dir).mkdir(parents=True, exist_ok=True)
+    print(f"mlmm: {args.leg_npz}, start {args.start or 'leg positions'}, n_inner {args.n_inner}; "
+          f"{len(qs)} states q = {qs.tolist()}", flush=True)
+    print(f"  {args.equil} + {args.iters} iterations x {args.steps_per_iter} steps x {dt} fs "
+          f"= {args.iters * args.steps_per_iter * dt / 1000:.1f} ps per state after equilibration; "
+          f"T {args.T} K; out {out_dir}", flush=True)
+    model = load_model(args.ckpt, args.backbone, device="cuda")
+    lad = MLMMLadder(args.leg_npz, model, qs, pos, n_inner=args.n_inner, T=args.T, dt_fs=dt,
+                     seed=args.seed, device="cuda")
+    t0 = time.perf_counter()
+    r = lad.run(out_dir, args.iters, args.steps_per_iter, n_equil=args.equil,
+                per_atom=not args.no_per_atom)
+    r["wall_seconds_this_session"] = time.perf_counter() - t0
+    pathlib.Path(f"{out_dir}/result.json").write_text(json.dumps(r, indent=1))
+    keys = [k for k in ("dG_W1", "dG_W2", "dG_cut", "dG_W3", "dG_TI", "dG_MBAR", "dG_MBAR_err",
+                        "per_atom_sum", "closure", "overlap_min") if k in r]
+    for k in keys:
+        print(f"  {k:12s} {r[k]:+.3f}" + (" kJ/mol" if k.startswith("dG") or k in ("per_atom_sum", "closure")
+                                          else ""))
+    print(f"  -> {out_dir}/result.json")
 
 
 if __name__ == "__main__":
