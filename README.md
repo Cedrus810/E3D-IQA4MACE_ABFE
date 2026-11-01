@@ -1,5 +1,8 @@
 # E3D-IQA4MACE · ABFE
 
+> Current design: [group-wise dummy states, MM sampling, model energies](DESIGN_2026-10-23_groupwise_dummy.md). Every state is sampled by MM MD; the model gives the ligand–environment coupling energy and its per-atom decomposition at the endpoints and never provides MD forces.
+> Read the principle below first, then [HANDOFF_2026-10-28.md](HANDOFF_2026-10-28.md). Links in "Status" and "Layout" to RESEARCH_PLAN / STATUS / PROJECT_PLAN are historical; those files are now in Archive.
+
 English | [中文](README_zh.md) | [日本語](README_ja.md)
 
 **Atom-resolved binding free energies from a physically gauged equivariant
@@ -19,11 +22,15 @@ E = Σᵢ E_intra(i) + Σ_{i<j} D_ij          (decomposition, pinned to observab
 D_LE = Σ_{i∈L} Σ_{a∈E} D_ia                (ligand–environment coupling)
 ```
 
-With the decomposition **gauged to physical observables** (not merely a
-reparameterization of the total energy), scaling the coupling by per-atom λᵢ
-and integrating along the diagonal path yields a per-atom decomposition of the
-decoupling free energy that sums exactly to the total and is independent of any
-atom-removal order — it is the Shapley value, for the cost of one ordinary ABFE.
+With the decomposition **constrained by physical observables**, atomic free-energy
+contributions can be defined along a specified alchemical path. Their sum equals
+the total in the exact-ensemble and exact-integration limit; the attribution still
+depends on the path convention. A simultaneous diagonal integral needs no discrete
+removal order, but generally differs from the discrete Shapley average over all
+removal permutations. The current groupwise route reports a step-by-atom matrix
+under [DESIGN §7.5](DESIGN_2026-10-23_groupwise_dummy.md#75-原子分解误差与输出边界),
+with removal-step totals separate from totals grouped by atom membership.
+Molecular atomic attribution has not yet been validated.
 
 | | per-atom dG | QM accuracy | polarization / charge transfer |
 |---|---|---|---|
