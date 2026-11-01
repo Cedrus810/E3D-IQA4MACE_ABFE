@@ -103,6 +103,46 @@ class Fires:
         return torch.as_tensor(np.asarray(x), dtype=self.dtype, device=self.device)
 
 
+class ShapeFires(Fires):
+    """Linear energy bridge from ligand-shape to one-point FIRES, fixed identities."""
+
+    def __init__(self, lig_idx, water_idx, n_inner, **kwargs):
+        super().__init__(lig_idx, water_idx, n_inner, **kwargs)
+        self.point = Fires(np.asarray(lig_idx)[:1], water_idx, n_inner, **kwargs)
+        self.shape_fraction = 0.0
+
+    def select_inner(self, pos_ang, box_ang):
+        inner = super().select_inner(pos_ang, box_ang)
+        self.point.inner = self.inner.clone()
+        self.point.inner_mask = self.inner_mask.clone()
+        return inner
+
+    def set_shape(self, fraction):
+        fraction = float(fraction)
+        if not 0.0 <= fraction <= 1.0:
+            raise ValueError("FIRES shape fraction must be in [0, 1]")
+        self.shape_fraction = fraction
+
+    def shape_energies(self, pos, box):
+        """Both endpoint restraint energies, without changing the bridge parameter."""
+        shape = super().energy(pos, box)
+        point = self.point.energy(pos, box)
+        return shape, point
+
+    def energy(self, pos, box):
+        fraction = self.shape_fraction
+        if fraction == 0.0:
+            return super().energy(pos, box)
+        if fraction == 1.0:
+            energy = self.point.energy(pos, box)
+            self.last = dict(self.point.last, shape_fraction=fraction)
+            return energy
+        shape, point = self.shape_energies(pos, box)
+        energy = (1 - fraction) * shape + fraction * point
+        self.last = dict(self.last, U=float(energy.detach()), U_point=float(point.detach()),
+                         shape_fraction=fraction)
+        return energy
+
 def heavy_selection(lig_idx, numbers, water_idx):
     """(ligand heavy atoms, [n_water, 1] water oxygens): the D16 ordering atoms.
 

@@ -138,14 +138,21 @@ class AnchoredForce(AlchemicalForce):
 
     def __init__(self, model, numbers, frag_id, es=False, charge=0,
                  ligand_charge=0, multiplicity=1, ligand=0, device=None, cover=None,
-                 cap=None):
+                 cap=None, drop_env=False, fast_forces=True, batch_fragments=False):
         """cover: None, or a {(Z_lig, Z_env): r_cov} table (lambda_mask.COVER_R)
         for the S3 cover switch on the head's pair terms. cap: None, or the
-        margin m (eV) of the S3 backbone cap on the attributed coupling."""
+        margin m (eV) of the S3 backbone cap on the attributed coupling.
+        drop_env: leave the environment's own energy E_bb(R_E) out of U (D19
+        option 3; `lambda_mask.anchored_energy`). fast_forces removes unused
+        attribution work during diagonal propagation; derivative recording
+        always retains the full per-atom path. batch_fragments is opt-in."""
         super().__init__(model, numbers, frag_id, mode="anchored", charge=charge,
                          multiplicity=multiplicity, ligand=ligand, device=device)
         self.es = es
         self.cap = cap
+        self.drop_env = drop_env
+        self.fast_forces = fast_forces
+        self.batch_fragments = batch_fragments
         from .lambda_mask import COVER_DELTA, cover_table
         self.cover = None if cover is None else (
             torch.as_tensor(np.asarray(numbers), dtype=torch.long, device=self.device),
@@ -162,11 +169,13 @@ class AnchoredForce(AlchemicalForce):
         lam = 1.0 - p if p <= 1.0 else 0.0
         self.lam = torch.full_like(self.lam, lam)
 
-    def _U(self, data, lam):
+    def _U(self, data, lam, per_atom=True):
         from .lambda_mask import anchored_energy
         return anchored_energy(self.model, data, lam, self.frag_id,
                                ligand=self.ligand, es=self.es, cut=self.cut,
-                               charges=self.charges, cover=self.cover, cap=self.cap)
+                               charges=self.charges, cover=self.cover, cap=self.cap,
+                               drop_env=self.drop_env, per_atom=per_atom,
+                               batch_fragments=self.batch_fragments)
 
     def torch_energy(self, p):
         data = self._graph(p.detach().cpu().numpy())
@@ -175,6 +184,26 @@ class AnchoredForce(AlchemicalForce):
 
     def energy_and_forces(self, positions_ang, need_dudl=False):
         data = self._graph(positions_ang)
+        if self.fast_forces and not need_dudl:
+            from .lambda_mask import _fragment, fragment_energies
+            if self.p == 0.0:
+                U = self.bb(data, training=False, compute_force=False)["energy"].sum()
+                if self.drop_env:
+                    environment = _fragment(data, self.frag_id, 1 - self.ligand, self.charges[1])
+                    U = U - self.bb(environment, training=False, compute_force=False)["energy"].sum()
+            elif self.p == 2.0:
+                if self.drop_env:
+                    fragment = _fragment(data, self.frag_id, self.ligand, self.charges[0])
+                    U = self.bb(fragment, training=False, compute_force=False)["energy"].sum()
+                else:
+                    energies = fragment_energies(self.bb, data, self.frag_id, self.ligand,
+                                                  self.charges, batch=self.batch_fragments)
+                    U = energies[0] + energies[1]
+            else:
+                diagonal = data["positions"].new_tensor(max(0.0, 1.0 - self.p))
+                U = self._U(data, diagonal, per_atom=False)[0].sum()
+            gradient, = torch.autograd.grad(U, data["positions"])
+            return float(U.detach()), -gradient.detach().cpu().numpy()
         lam = self.lam.clone().requires_grad_(need_dudl and self.cut is None)
         U, c, parts = self._U(data, lam)
         outs = [data["positions"]] + ([lam] if lam.requires_grad else [])

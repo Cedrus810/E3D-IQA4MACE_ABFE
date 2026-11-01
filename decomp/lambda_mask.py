@@ -155,8 +155,34 @@ def _fragment(data, frag_id, which, charge):
     return sub
 
 
+def fragment_energies(backbone, data, frag_id, ligand=0, charges=(0, 0), batch=False):
+    """Fragment backbone energies, optionally evaluated as two independent graphs."""
+    fragments = [_fragment(data, frag_id, which, charge)
+                 for which, charge in ((ligand, charges[0]), (1 - ligand, charges[1]))]
+    if not batch:
+        return tuple(backbone(fragment, training=False, compute_force=False)["energy"].sum()
+                     for fragment in fragments)
+    first, second = fragments
+    first_size, second_size = len(first["positions"]), len(second["positions"])
+    combined = dict(first)
+    for key in ("positions", "node_attrs", "shifts", "unit_shifts"):
+        combined[key] = torch.cat([first[key], second[key]])
+    combined["edge_index"] = torch.cat([first["edge_index"], second["edge_index"] + first_size], dim=1)
+    combined["batch"] = torch.cat([first["batch"], second["batch"] + 1])
+    combined["ptr"] = first["ptr"].new_tensor([0, first_size, first_size + second_size])
+    for key in ("cell", "rcell", "volume", "pbc", "fermi_level", "external_field",
+                "total_charge", "total_spin", "head"):
+        if key in first:
+            combined[key] = torch.cat([first[key], second[key]])
+    energies = backbone(combined, training=False, compute_force=False)["energy"].reshape(-1)
+    if len(energies) != 2:
+        raise ValueError("batched fragment backbone must return one energy per graph")
+    return energies[0], energies[1]
+
+
 def anchored_energy(model, data, lam, frag_id, ligand=0, es=False, cut=None,
-                    charges=(0, 0), cover=None, cap=None, cap_tau=0.025):
+                    charges=(0, 0), cover=None, cap=None, cap_tau=0.025, drop_env=False,
+                    per_atom=True, batch_fragments=False):
     """The anchored Hamiltonian of RESEARCH_PLAN_v3.md S3, one graph.
 
         U(R, lambda) = E_bb(R) - sum_{i in L} (1 - lambda_i) c_i(R)        lambda > 0, full graph
@@ -191,16 +217,29 @@ def anchored_energy(model, data, lam, frag_id, ligand=0, es=False, cut=None,
     run away below the two physical endpoints. The excess depends on R only,
     so U stays linear in each lambda_i and dU/dlambda_i = c_i (capped) holds;
     exactness is untouched. Costs the two fragment energies every step.
-    Returns (U [1], c [n_nodes], parts dict).
+
+    drop_env=True (D19 option 3, user 2026-10-18; v3 S6.3.4a) subtracts the
+    environment fragment's own energy E_bb(R_E) at every lambda: ML then
+    carries only E_bb(R_L) + truth - sum (1 - lambda_i) c_i, and the
+    environment's internal energy is left to MM. U(0) = E_bb(R_L). truth,
+    c, the cover switch and the cap are unchanged. parts then holds E_L and
+    E_E, and E_bb, U_plus and U0 are the reduced ones.
+    per_atom=False takes a scalar lambda and returns c=None. It evaluates the
+    same diagonal Hamiltonian using the total Coulomb cross term directly,
+    without the Euler split used for atom attribution. batch_fragments=True
+    evaluates L and E as two independent graphs in one backbone call.
+    Returns (U [1], c [n_nodes] or None, parts dict).
     """
     import contextlib
     from .polar_es import coulomb_cross
 
     if int(data["batch"].max()) != 0:
         raise ValueError("anchored_energy takes one graph")
+    if not per_atom and lam.ndim != 0:
+        raise ValueError("total-coupling propagation requires a scalar lambda")
     bb = model.backbone
     in_L = frag_id == ligand
-    ctx = (coulomb_cross(bb, frag_id, ligand, per_atom=True) if es
+    ctx = (coulomb_cross(bb, frag_id, ligand, per_atom=per_atom) if es
            else contextlib.nullcontext({}))
     with ctx as rec:
         out = bb(data, training=False, compute_force=False)
@@ -222,29 +261,43 @@ def anchored_energy(model, data, lam, frag_id, ligand=0, es=False, cut=None,
     c = torch.zeros(len(frag_id), dtype=D.dtype, device=D.device).index_add(
         0, lig_end[cross], 0.5 * D[cross])
     es_grad = torch.zeros((), dtype=D.dtype, device=D.device)
-    if es:
+    if es and per_atom:
         c = c + torch.where(in_L, rec["per_atom"].to(D.dtype), torch.zeros_like(c))
         x = rec["cross"].sum()
         es_grad = (1 - lam[in_L].mean().detach()) * (x - x.detach())
-    w = torch.where(in_L, 1 - lam, torch.zeros_like(lam))
+    if not per_atom:
+        total_coupling = c[in_L].sum() + (rec["cross"].sum() if es else 0.0)
+    else:
+        w = torch.where(in_L, 1 - lam, torch.zeros_like(lam))
     U0 = None
-    if cap is not None or cut is not None:
-        U0 = sum(bb(_fragment(data, frag_id, k, q), training=False,
-                    compute_force=False)["energy"].sum()
-                 for k, q in ((ligand, charges[0]), (1 - ligand, charges[1])))
+    if cap is not None or cut is not None or drop_env:
+        E_L, E_E = fragment_energies(bb, data, frag_id, ligand, charges, batch=batch_fragments)
+        U0 = E_L + E_E
     parts = {"E_bb": E_bb}
+    if U0 is not None:
+        parts.update({"E_L": E_L, "E_E": E_E})
     if cap is not None:
         truth = E_bb - U0
         # S with the cross term's position gradient (its per-atom split has none)
-        S = (c * in_L).sum() + ((x - x.detach()) if es else 0.0)
+        S = ((c * in_L).sum() + ((x - x.detach()) if es else 0.0)
+             if per_atom else total_coupling)
         tau = float(cap_tau)
         ceiling = tau * torch.nn.functional.softplus((truth + cap) / tau)
         S_eff = -tau * torch.logaddexp(-S / tau, -ceiling / tau)
         excess = S - S_eff
-        c = c - torch.where(in_L, excess / in_L.sum(), torch.zeros_like(c))
+        if per_atom:
+            c = c - torch.where(in_L, excess / in_L.sum(), torch.zeros_like(c))
+        else:
+            total_coupling = S_eff
         parts.update({"truth": truth, "excess": excess})
-    U_plus = E_bb - (w * c).sum() - es_grad
-    parts["sum_c"] = (c * in_L).sum()
+    U_plus = (E_bb - (w * c).sum() - es_grad if per_atom
+              else E_bb - (1 - lam) * total_coupling)
+    if drop_env:
+        U_plus, U0 = U_plus - E_E, E_L
+        parts["E_bb"] = E_bb - E_E
+    parts["sum_c"] = (c * in_L).sum() if per_atom else total_coupling
+    if not per_atom:
+        c = None
     if cut is None:
         return U_plus.reshape(1), c, parts
 

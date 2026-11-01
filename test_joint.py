@@ -49,6 +49,17 @@ from test_lint import BATCH, DEV, MODEL, OUT
 ES = os.environ.get("E3D_ES", "0") == "1"
 
 SAPT_N = 4
+# Response supervision (experiments/2026-10-25_head_retrain/PLAN.md, user 2026-10-25): E3D_RESP is a
+# make_data.py pack file of ligand + 50-water clusters along short MM trajectories, ligand internal deformation
+# only. Their T = C_bb - X enters the cluster L_int term with its own normaliser, and every pair (t = 0, t > 0)
+# of one trajectory adds w_resp * [Delta sum_c D_c - Delta T]^2 / mean(Delta T^2). Unset: the run is unchanged.
+RESP = os.environ.get("E3D_RESP")
+W_RESP = float(os.environ.get("E3D_W_RESP", 1))
+# Normaliser of the response clusters' total term: "ms" mean(T^2) (default), or "var" var(T). T is ~1.9 eV and
+# its frame-to-frame spread ~0.2 eV, so under "ms" a 0.2 eV per-frame error costs ~0.01 and is not fitted
+# (head_retrain/RESULT.md, 2026-10-26).
+RESP_NORM = os.environ.get("E3D_RESP_NORM", "ms")
+assert RESP_NORM in ("ms", "var"), RESP_NORM
 SAPT_SCALE = None   # dataset-level mean square per channel; set in __main__      # es, ex, ind, disp
 
 
@@ -137,6 +148,20 @@ def _atom_batches(sizes, max_n, max_atoms):
     return out
 
 
+def _batches(data):
+    """_atom_batches over everything but the response clusters, which come last; each response pair
+    (t = 0 and one t > 0 of the same trajectory) is its own batch, so Delta sum_c D_c is one forward."""
+    sizes = [len(p) for p in data[0]]
+    if len(data) <= 8:
+        return _atom_batches(sizes, BATCH, BATCH * 34)
+    traj, step = data[8], data[9]
+    n0 = int((traj < 0).sum())
+    assert (traj[:n0] < 0).all() and (traj[n0:] >= 0).all()
+    ref = {int(traj[i]): i for i in range(n0, len(sizes)) if step[i] == 0}
+    return (_atom_batches(sizes[:n0], BATCH, BATCH * 34)
+            + [[ref[int(traj[i])], i] for i in range(n0, len(sizes)) if step[i] > 0])
+
+
 def precompute(bb, teacher, data, tag="", cache_path=None):
     """Targets depend only on frozen modules and fixed geometries, so compute
     them once. Doing it inside the training loop runs the backbone three times
@@ -153,7 +178,7 @@ def precompute(bb, teacher, data, tag="", cache_path=None):
         return blob
     pos_l, num_l, frag_l, E_l, q_l = data[:5]
     out, t0 = [], time.perf_counter()
-    for j in _atom_batches([len(p) for p in pos_l], BATCH, BATCH * 34):
+    for j in _batches(data):
         b = mace_batch([pos_l[i] for i in j], [num_l[i] for i in j], bb,
                        charges=[int(q_l[i]) for i in j],
                        frag_ids=[frag_l[i] for i in j], device=DEV)
@@ -180,6 +205,8 @@ def run(tag, w_E, w_F, w_I, w_int, w_sapt, train, test, steps, teacher,
     pos_l, num_l, frag_l, E_l, q_l = train[:5]
     sapt_l, sapt_scale = train[6], SAPT_SCALE
     clu = train[7] if len(train) > 7 else None
+    traj = train[8] if len(train) > 8 else np.full(len(E_l), -1)
+    rsp = traj >= 0
     if ES:
         # Subtract the explicit L/E Coulomb from the coupling and the SAPT es
         # channel, and renormalise on the targets the head actually sees.
@@ -192,16 +219,27 @@ def run(tag, w_E, w_F, w_I, w_int, w_sapt, train, test, steps, teacher,
         ok = np.isfinite(sapt_l).all(-1)
         sapt_scale = (sapt_l[ok] ** 2).mean(0)
         print(f"      explicit L/E Coulomb: |mean| {np.abs(X).mean():.4f} eV "
-              f"(dimers {np.abs(X[~clu]).mean() if clu is not None else np.abs(X).mean():.4f})",
+              f"(dimers {np.abs(X[~clu & ~rsp]).mean() if clu is not None else np.abs(X).mean():.4f})",
               flush=True)
-    ms_dimer = float(np.mean(E_l[~clu] ** 2)) if clu is not None \
+    ms_dimer = float(np.mean(E_l[~clu & ~rsp] ** 2)) if clu is not None \
         else float(np.mean(E_l ** 2))
     ms_clu = float(np.mean(E_l[clu] ** 2)) if clu is not None and clu.any() else 1.0
+    if rsp.any():
+        # E_l here is T = C_bb - X. Response pairs: (reference t = 0, deformed t > 0) of one trajectory.
+        ref = {int(traj[i]): i for i in np.where(rsp & (train[9] == 0))[0]}
+        dT = np.array([E_l[i] - E_l[ref[int(traj[i])]] for i in np.where(rsp & (train[9] > 0))[0]])
+        ms_rsp = float(np.mean(E_l[rsp] ** 2)) if RESP_NORM == "ms" else float(np.var(E_l[rsp]))
+        ms_resp = float(np.mean(dT ** 2))
+        print(f"      response clusters: {int(rsp.sum())} configurations, {len(dT)} pairs; "
+              f"T normaliser {RESP_NORM} = ({np.sqrt(ms_rsp):.4f} eV)^2, rms Delta T {np.sqrt(ms_resp):.4f} eV, "
+              f"w_resp {W_RESP:g}",
+              flush=True)
     rng = np.random.default_rng(0)
     # Absolute, not steps//8: at 32,000 steps that was one line every
     # 4,000 steps -- 15 minutes of silence that looks like a hang.
     t0, step, every = time.perf_counter(), 0, min(250, max(1, steps // 8))
     run_loss = []   # print a moving average: a single batch swings 2x on its own
+    run_resp = []
     n_batches = len(cache)
 
     while step < steps:
@@ -233,11 +271,20 @@ def run(tag, w_E, w_F, w_I, w_int, w_sapt, train, test, steps, teacher,
                 # CCSD(T) anchor 3 orders of magnitude below the backbone
                 # labels and quietly drop the only real data in the term.
                 m = torch.as_tensor(clu[j], dtype=torch.bool, device=DEV)
+                r = torch.as_tensor(rsp[j], dtype=torch.bool, device=DEV)
                 ld, _ = interaction_loss(out["D"], b["edge_index"], b["frag_id"],
-                                         eb, Eint_ref, ng, mask=~m)
+                                         eb, Eint_ref, ng, mask=~m & ~r)
                 lc, _ = interaction_loss(out["D"], b["edge_index"], b["frag_id"],
                                          eb, Eint_ref, ng, mask=m)
                 loss = loss + w_int * (ld / ms_dimer + lc / ms_clu)
+                if rsp[j].any():
+                    # a response batch is exactly [t = 0, t > 0] of one trajectory (_batches)
+                    ln, pn = interaction_loss(out["D"], b["edge_index"], b["frag_id"],
+                                              eb, Eint_ref, ng, mask=r)
+                    loss = loss + w_int * ln / ms_rsp
+                    lr = ((pn[1] - pn[0]) - float(E_l[j[1]] - E_l[j[0]])) ** 2 / ms_resp
+                    loss = loss + W_RESP * lr
+                    run_resp.append(float(lr.detach()))
         if w_sapt:
             # The components pin how D is spread over the boundary (S13.10,
             # S13.11); the total above pins the cancelling residue. Both, or
@@ -253,7 +300,9 @@ def run(tag, w_E, w_F, w_I, w_int, w_sapt, train, test, steps, teacher,
         if step == 1 or step % every == 0:
             print(f"      step {step:6d}/{steps}  "
                   f"loss {np.mean(run_loss[-every:]):8.4f} "
-                  f"[{time.perf_counter()-t0:4.0f}s]", flush=True)
+                  + (f"resp {np.mean(run_resp[-every:]):8.4f} ({len(run_resp)} pairs seen) "
+                     if run_resp else "")
+                  + f"[{time.perf_counter()-t0:4.0f}s]", flush=True)
 
     r = evaluate(model, bb, teacher, test)
     if ckpt is not None:
@@ -380,13 +429,29 @@ if __name__ == "__main__":
               f"|mean| {np.abs(ce).mean():.2f}", flush=True)
     else:
         train = tuple(train) + (clu,)
+    if RESP:
+        z = np.load(RESP, allow_pickle=True)
+        nr, n0 = len(z["C_bb"]), len(train[0])
+        train = (train[0] + list(z["positions"]), train[1] + list(z["numbers"]),
+                 train[2] + list(z["frag"]), np.concatenate([train[3], z["C_bb"]]),
+                 np.concatenate([train[4], np.zeros(nr, dtype=train[4].dtype)]),
+                 np.concatenate([train[5], -(n_clu + 1 + np.arange(nr))]),
+                 np.concatenate([train[6], np.full((nr, SAPT_N), np.nan)]),
+                 np.concatenate([train[7], np.zeros(nr, dtype=bool)]),
+                 np.concatenate([np.full(n0, -1), z["traj"]]),
+                 np.concatenate([np.zeros(n0, dtype=int), z["step"]]))
+        print(f"  + {nr:,} response clusters from {RESP} ({len(set(z['traj'].tolist()))} trajectories): "
+              f"C_bb {z['C_bb'].min():+.2f} .. {z['C_bb'].max():+.2f} eV", flush=True)
 
     # The cluster count belongs in every output name: the cached E/F targets
     # and the trained head both depend on it, and reusing a dimer-only cache
     # under a cluster run is silent and wrong.
     tag = f"_c{n_clu}{ftag}" if n_clu else ""
     tag += "_es" if ES else ""
+    tag += f"_{pathlib.Path(RESP).stem}" if RESP else ""
     stem = f"{cfg}_n{n_tr}{tag}_h{hidden}_s{steps}"
+    stem += f"_wr{W_RESP:g}" if RESP and W_RESP != 1 else ""
+    stem += "_nvar" if RESP and RESP_NORM == "var" else ""
     for d in ("ckpt", "logs", "data"):
         (OUT / d).mkdir(parents=True, exist_ok=True)
     results_path = OUT / f"logs/joint_{stem}.json"

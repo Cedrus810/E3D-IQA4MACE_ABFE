@@ -117,10 +117,41 @@ def main():
     g.add_argument("--n-inner", type=int, default=20, help="ML waters (FIRES n)")
     g.add_argument("--w1", type=int, default=2, help="states on W1 incl. both ends")
     g.add_argument("--w2", type=int, default=12, help="states on W2 incl. both ends")
+    g.add_argument("--sw", type=int, default=6, help="states on SW (inner waters ML -> MM) incl. both ends")
     g.add_argument("--w3", type=int, default=6, help="states on W3 incl. both ends")
     g.add_argument("--out-dir", default=None, help="checkpoint + results; rerun to resume")
     g.add_argument("--seed", type=int, default=0)
     g.add_argument("--no-per-atom", action="store_true", help="skip the per-atom terms")
+    g.add_argument("--qs", default=None,
+                   help="explicit path states, comma-separated q in [0, 4] (overrides --w1/--w2/--cut-windows/--w3)")
+    g.add_argument("--mm-only", action="store_true",
+                   help="all-MM path control (v3 S7.2): same path, no ML, FIRES on MM inner waters")
+    g.add_argument("--no-fires", action="store_true", help="--mm-only without FIRES")
+    g.add_argument("--save-every", type=int, default=1, help="checkpoint every N iterations")
+    g.add_argument("--no-em", action="store_true", help="skip the steepest-descent EM of each replica on a fresh start")
+    g.add_argument("--init-from", default=None,
+                   help="start each state from the nearest-q configuration of this earlier run dir")
+    g.add_argument("--init-q", type=float, default=None,
+                   help="with --init-from: start every state from that run's state at this q (e.g. 3.0)")
+    g.add_argument("--platform", default="CUDA", help="OpenMM platform for the replicas")
+    g.add_argument("--ref", action="store_true",
+                   help="D18's neat-solvent reference leg dG_ref: q in [3, 4], wall off, FIRES around one "
+                        "ghost atom (start it from a refilled, decoupled frame: --init-from <tail run> --init-q 5)")
+    shell_options = g.add_mutually_exclusive_group()
+    shell_options.add_argument("--shell-mm", action="store_true",
+                   help="D19 option 3 (v3 S6.3.4a): ML carries only the ligand and its coupling, the inner "
+                        "waters are MM water; path q in [0, 4] = W1 | W2 | cut | W3, no SW / dG_ref")
+    shell_options.add_argument("--polar-shell", action="store_true",
+                   help="option 2 candidate: keep the POLAR shell through W3, then bridge shape FIRES "
+                        "to one-point FIRES; q in [0, 5], no SW or dG_ref; endpoint is a POLAR droplet")
+    g.add_argument("--shape-windows", type=int, default=6, help="states on the POLAR-shell shape leg")
+    g.add_argument("--reference-forces", action="store_true", help="disable equivalent propagation shortcuts and fragment batching for A/B checks")
+    g.add_argument("--batch-fragments", action=argparse.BooleanOptionalAction, default=True,
+                   help="evaluate independent L/I fragments in one backbone batch (default on; user 2026-10-23)")
+    g.add_argument("--ml-dtype", choices=("float32", "float64"), default="float32", help="ML model precision; default preserves production FP32")
+    g.add_argument("--eval-precision", default="double", choices=["double", "mixed", "single"],
+                   help="OpenMM precision of the u_kn / derivative evaluator; double is needed for the "
+                        "per-atom Coulomb closure, mixed is enough for totals")
     ap.add_argument("--cut-windows", type=int, default=8,
                     help="anchored: windows on the cut segment (S13.25: 4-13 at n=20-100)")
     ap.add_argument("--es", action="store_true",
@@ -218,6 +249,8 @@ def main():
 def main_mlmm(args):
     """The full ML/MM path (v3 S6.3.4): W1 | W2 | cut | W3 on one HREMD ladder."""
     from decomp.mlmm_hremd import MLMMLadder, path_states
+    if args.polar_shell and (args.ref or args.mm_only or args.no_fires):
+        raise ValueError("--polar-shell requires ML and FIRES, without --ref")
     dt = 2.0 if args.dt is None else args.dt
     leg = np.load(args.leg_npz, allow_pickle=True)
     pos = np.asarray(leg["positions"], dtype=np.float64)
@@ -225,27 +258,43 @@ def main_mlmm(args):
         f, k = args.start.rsplit(":", 1)
         st = np.load(f, allow_pickle=True)
         pos = np.asarray(st["positions"][int(k)], dtype=np.float64)
-    qs = path_states(args.w1, args.w2, args.cut_windows + 1, args.w3)
-    out_dir = args.out_dir or f"logs/mlmm_{pathlib.Path(args.leg_npz).stem}"
+    if args.init_from and args.init_q is not None:      # pick the inner waters on the frame the run starts from
+        z = np.load(f"{args.init_from}/state.npz", allow_pickle=True)
+        pos = np.asarray(z["P"][int(np.argmin(np.abs(np.asarray(z["qs"], float) - args.init_q)))], dtype=np.float64)
+    qs = (np.array(sorted(float(x) for x in args.qs.split(","))) if args.qs
+          else path_states(args.w1, args.w2, args.cut_windows + 1, args.sw, args.w3,
+                           shell_mm=args.shell_mm, polar_shell=args.polar_shell, n_shape=args.shape_windows))
+    suffix = "_polar_shell" if args.polar_shell else ""
+    out_dir = args.out_dir or f"logs/mlmm_{pathlib.Path(args.leg_npz).stem}{suffix}"
     pathlib.Path(out_dir).mkdir(parents=True, exist_ok=True)
-    print(f"mlmm: {args.leg_npz}, start {args.start or 'leg positions'}, n_inner {args.n_inner}; "
+    print(f"mlmm{' (all-MM control)' if args.mm_only else ''}{' D19 shell_mm' if args.shell_mm else ''}{' POLAR shell + shape' if args.polar_shell else ''}: {args.leg_npz}, start {args.start or 'leg positions'}, n_inner {args.n_inner}; "
           f"{len(qs)} states q = {qs.tolist()}", flush=True)
     print(f"  {args.equil} + {args.iters} iterations x {args.steps_per_iter} steps x {dt} fs "
           f"= {args.iters * args.steps_per_iter * dt / 1000:.1f} ps per state after equilibration; "
           f"T {args.T} K; out {out_dir}", flush=True)
-    model = load_model(args.ckpt, args.backbone, device="cuda")
+    device = "cuda" if args.platform == "CUDA" else args.device
+    model = None if args.mm_only else load_model(args.ckpt, args.backbone, device=device).to(getattr(torch, args.ml_dtype))
+    # FIRES alone is cheaper on the CPU (2.9 vs 22.6 ms per step on the acetamide leg)
     lad = MLMMLadder(args.leg_npz, model, qs, pos, n_inner=args.n_inner, T=args.T, dt_fs=dt,
-                     seed=args.seed, device="cuda")
+                     seed=args.seed, device="cpu" if args.mm_only else device,
+                     mm_only=args.mm_only, use_fires=not args.no_fires,
+                     eval_precision=args.eval_precision, platform=args.platform, ref=args.ref,
+                     shell_mm=args.shell_mm, polar_shell=args.polar_shell,
+                     fast_forces=not args.reference_forces,
+                     batch_fragments=args.batch_fragments and not args.reference_forces)
     t0 = time.perf_counter()
     r = lad.run(out_dir, args.iters, args.steps_per_iter, n_equil=args.equil,
-                per_atom=not args.no_per_atom)
+                per_atom=not args.no_per_atom, save_every=args.save_every,
+                init_from=args.init_from, init_q=args.init_q, em=not args.no_em)
     r["wall_seconds_this_session"] = time.perf_counter() - t0
     pathlib.Path(f"{out_dir}/result.json").write_text(json.dumps(r, indent=1))
-    keys = [k for k in ("dG_W1", "dG_W2", "dG_cut", "dG_W3", "dG_TI", "dG_MBAR", "dG_MBAR_err",
+    keys = [k for k in ("dG_W1", "dG_W2", "dG_cut", "dG_SW", "dG_W3", "dG_shape", "dG_TI", "dG_MBAR", "dG_MBAR_err",
                         "per_atom_sum", "closure", "overlap_min") if k in r]
     for k in keys:
         print(f"  {k:12s} {r[k]:+.3f}" + (" kJ/mol" if k.startswith("dG") or k in ("per_atom_sum", "closure")
                                           else ""))
+    if args.polar_shell:
+        print("  target endpoint: POLAR shell around one point in MM solvent; not the bulk-MM reference", flush=True)
     print(f"  -> {out_dir}/result.json")
 
 
