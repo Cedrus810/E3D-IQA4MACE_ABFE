@@ -1,0 +1,5 @@
+2000922 PWWP1_ligand-8 rep1
+2001129 CyclophilinD_ligand-8 rep1
+# 2026-10-23 16:3x relaunch with softcore form (the two lines above died with NaN, hard LJ)
+2010057
+# 2026-10-23 18:17 step_eval: 2010057 = bash -c wrapper, 2010058 run_step_eval_fulda.sh, 2010059 python

@@ -1,0 +1,173 @@
+{
+  "review_date_JST": "2026-10-30",
+  "scope": "saved files only, not live scheduler status",
+  "interpretation": "block means and spread are diagnostics, not a_j or equilibrium evidence",
+  "cost_note": "recorded model-call count excludes resume energy rechecks; account separately",
+  "ladders": [
+    {
+      "rep": 1,
+      "file": "experiments/2026-10-25_eta_hmc/runs/CyclophilinD_ligand-8/ladder_S0_start1_ex_v1x1000.npz",
+      "file_exists": true,
+      "complete": true,
+      "completed_sweeps": 1000,
+      "etas": [
+        0.0,
+        0.25,
+        0.5,
+        1.0
+      ],
+      "head": "/home/ruigengji/E3D/runs/polar-M/ckpt/joint_organic_n50000_c10000_lampool400_solvent_es_resp_v2_h256_s104000_nvar_N.pt",
+      "model_calls_recorded": 4004,
+      "label_mapping_max_abs_error": 0.0,
+      "atom_sum_max_abs_error": 1.7408297026122455e-13,
+      "eta1_block100_means": [
+        -48.08277031030839,
+        -66.51539655035238,
+        -76.62696903948371,
+        -85.93833879484028,
+        -96.78801682079062,
+        -96.72608914556993,
+        -97.09712591230904,
+        -96.35505237883086,
+        -97.09712591230904,
+        -96.35505237883085
+      ],
+      "eta1_last500_mean": -96.72608914556996,
+      "eta1_last500_local_accepted": 0,
+      "eta1_last500_local_attempted": 500,
+      "eta1_last500_distinct_scalar_energies": 2,
+      "all_labels_last500_mean": [
+        -9.645506866908164,
+        -14.95730901869031,
+        -78.91632434209356,
+        -96.726089145571
+      ],
+      "pair_exchange_rates": [
+        0.394,
+        0.208,
+        0.092
+      ],
+      "source_500_prefix_equal": {
+        "dU": true,
+        "label_dU": true,
+        "perm": true,
+        "acc": true,
+        "dU_atom": true
+      }
+    },
+    {
+      "rep": 2,
+      "file": "experiments/2026-10-25_eta_hmc/runs/CyclophilinD_ligand-8/ladder_S0_start2_ex_v1x1000.npz",
+      "file_exists": false,
+      "log_last_lines": [
+        "  File \"/home/ruigengji/E3D/experiments/2026-10-25_eta_hmc/eta_exchange.py\", line 190, in run_ladder",
+        "    raise ValueError(f\"walker {w}: current model energy differs from the committed cache\")",
+        "ValueError: walker 3: current model energy differs from the committed cache"
+      ]
+    },
+    {
+      "rep": 3,
+      "file": "experiments/2026-10-25_eta_hmc/runs/CyclophilinD_ligand-8/ladder_S0_start3_ex_v1x1000.npz",
+      "file_exists": true,
+      "complete": true,
+      "completed_sweeps": 1000,
+      "etas": [
+        0.0,
+        0.25,
+        0.5,
+        1.0
+      ],
+      "head": "/home/ruigengji/E3D/runs/polar-M/ckpt/joint_organic_n50000_c10000_lampool400_solvent_es_resp_v2_h256_s104000_nvar_N.pt",
+      "model_calls_recorded": 4004,
+      "label_mapping_max_abs_error": 0.0,
+      "atom_sum_max_abs_error": 1.9984014443252818e-13,
+      "eta1_block100_means": [
+        -56.21307604062093,
+        -60.731082499205094,
+        -61.29924369207554,
+        -54.7756547618533,
+        -65.20237236669767,
+        -49.69269650702944,
+        -52.07383139584339,
+        -60.62953782674717,
+        -59.191181194861166,
+        -56.02900851023144
+      ],
+      "eta1_last500_mean": -55.523251086942516,
+      "eta1_last500_local_accepted": 45,
+      "eta1_last500_local_attempted": 500,
+      "eta1_last500_distinct_scalar_energies": 73,
+      "all_labels_last500_mean": [
+        10.132879936242338,
+        -21.345804650753987,
+        -44.35944630756987,
+        -55.523251086942146
+      ],
+      "pair_exchange_rates": [
+        0.112,
+        0.286,
+        0.234
+      ],
+      "source_500_prefix_equal": {
+        "dU": true,
+        "label_dU": true,
+        "perm": true,
+        "acc": true,
+        "dU_atom": true
+      }
+    },
+    {
+      "rep": 4,
+      "file": "experiments/2026-10-25_eta_hmc/runs/CyclophilinD_ligand-8/ladder_S0_start4_ex_v1x1000.npz",
+      "file_exists": true,
+      "complete": true,
+      "completed_sweeps": 1000,
+      "etas": [
+        0.0,
+        0.25,
+        0.5,
+        1.0
+      ],
+      "head": "/home/ruigengji/E3D/runs/polar-M/ckpt/joint_organic_n50000_c10000_lampool400_solvent_es_resp_v2_h256_s104000_nvar_N.pt",
+      "model_calls_recorded": 4004,
+      "label_mapping_max_abs_error": 0.0,
+      "atom_sum_max_abs_error": 1.7408297026122455e-13,
+      "eta1_block100_means": [
+        -42.67466916705493,
+        -51.42394060437498,
+        -51.08431447586014,
+        -56.2935002972672,
+        -58.93569419232812,
+        -57.32864644799816,
+        -63.41874381767147,
+        -65.7715160913323,
+        -58.41991356903649,
+        -58.83818425428752
+      ],
+      "eta1_last500_mean": -60.75540083606518,
+      "eta1_last500_local_accepted": 14,
+      "eta1_last500_local_attempted": 500,
+      "eta1_last500_distinct_scalar_energies": 32,
+      "all_labels_last500_mean": [
+        -7.805591166487857,
+        -22.8350040506987,
+        -44.5749963191204,
+        -60.75540083606541
+      ],
+      "pair_exchange_rates": [
+        0.266,
+        0.386,
+        0.252
+      ],
+      "source_500_prefix_equal": {
+        "dU": true,
+        "label_dU": true,
+        "perm": true,
+        "acc": true,
+        "dU_atom": true
+      }
+    }
+  ],
+  "completed_ladders": 3,
+  "spread_eta1_last500_complete_ladders": 41.20283805862744
+}

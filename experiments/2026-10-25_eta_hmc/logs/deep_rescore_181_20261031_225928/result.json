@@ -1,0 +1,272 @@
+{
+ "panel": "logs/deep_shallow_panel_20261031.npz",
+ "current_model_identity": {
+  "backbone": "/home/ruigengji/MLP/mace/MACE-POLAR-1-M.model",
+  "head": "/home/ruigengji/E3D/runs/polar-M/ckpt/joint_organic_n50000_c10000_lampool400_solvent_es_resp_v2_h256_s104000_nvar_N.pt",
+  "backbone_mtime": 1771815204.0,
+  "head_mtime": 1792972035.0
+ },
+ "existing_restart_atol": 0.001,
+ "model_calls": 8,
+ "model_seconds": 4.789765070891008,
+ "frames": [
+  {
+   "source": "/home/ruigengji/E3D/experiments/2026-10-25_eta_hmc/runs/CyclophilinD_ligand-8/ladder_S0_start1_ex_v1x1000b.npz",
+   "tag": "_ex_v1x1000b",
+   "rep": 1,
+   "sweep": 1000,
+   "walker": 2,
+   "eta": 1.0,
+   "start_frames": [
+    "xyz[499]",
+    "xyz[399]",
+    "xyz[299]",
+    "xyz[199]"
+   ],
+   "head_mtime_at_source": 1792972035.82024,
+   "backbone_mtime_at_source": 1771815204.0,
+   "current_deltaU": -104.41274131480466,
+   "cached_deltaU": -104.41274131336118,
+   "deltaU_difference": -1.4434817785513587e-09,
+   "component_max_abs_difference": {
+    "C_ML": 3.9189806955164386e-10,
+    "C_ML_learned": 1.5631940186722204e-13,
+    "C_ML_coul": 3.9186787148537405e-10,
+    "C_MM": 8.881784197001252e-16,
+    "dU_atom": 3.9190695133584086e-10,
+    "cluster_system_indices": 0.0,
+    "omega_water_resid": 0.0
+   },
+   "same_cluster_and_omega": true,
+   "cache_reproduced": true
+  },
+  {
+   "source": "/home/ruigengji/E3D/experiments/2026-10-25_eta_hmc/runs/CyclophilinD_ligand-8/ladder_S0_start2_ex_v1x1000b.npz",
+   "tag": "_ex_v1x1000b",
+   "rep": 2,
+   "sweep": 1000,
+   "walker": 3,
+   "eta": 1.0,
+   "start_frames": [
+    "xyz[499]",
+    "xyz[399]",
+    "xyz[299]",
+    "xyz[199]"
+   ],
+   "head_mtime_at_source": 1792972035.82024,
+   "backbone_mtime_at_source": 1771815204.0,
+   "current_deltaU": -76.87657680571186,
+   "cached_deltaU": -76.87657680625279,
+   "deltaU_difference": 5.409219738794491e-10,
+   "component_max_abs_difference": {
+    "C_ML": 5.482974074766389e-10,
+    "C_ML_learned": 1.2079226507921703e-13,
+    "C_ML_coul": 5.484110943143605e-10,
+    "C_MM": 8.881784197001252e-16,
+    "dU_atom": 5.482974074766389e-10,
+    "cluster_system_indices": 0.0,
+    "omega_water_resid": 0.0
+   },
+   "same_cluster_and_omega": true,
+   "cache_reproduced": true
+  },
+  {
+   "source": "/home/ruigengji/E3D/experiments/2026-10-25_eta_hmc/runs/CyclophilinD_ligand-8/ladder_S0_start3_ex_v1x1000b.npz",
+   "tag": "_ex_v1x1000b",
+   "rep": 3,
+   "sweep": 1000,
+   "walker": 2,
+   "eta": 1.0,
+   "start_frames": [
+    "xyz[499]",
+    "xyz[399]",
+    "xyz[299]",
+    "xyz[199]"
+   ],
+   "head_mtime_at_source": 1792972035.82024,
+   "backbone_mtime_at_source": 1771815204.0,
+   "current_deltaU": -58.41498967597934,
+   "cached_deltaU": -58.414989675892656,
+   "deltaU_difference": -8.668621376273222e-11,
+   "component_max_abs_difference": {
+    "C_ML": 2.601687754122395e-10,
+    "C_ML_learned": 1.7053025658242404e-13,
+    "C_ML_coul": 2.6014115861450193e-10,
+    "C_MM": 0.0,
+    "dU_atom": 2.601687754122395e-10,
+    "cluster_system_indices": 0.0,
+    "omega_water_resid": 0.0
+   },
+   "same_cluster_and_omega": true,
+   "cache_reproduced": true
+  },
+  {
+   "source": "/home/ruigengji/E3D/experiments/2026-10-25_eta_hmc/runs/CyclophilinD_ligand-8/ladder_S0_start4_ex_v1x1000b.npz",
+   "tag": "_ex_v1x1000b",
+   "rep": 4,
+   "sweep": 1000,
+   "walker": 3,
+   "eta": 1.0,
+   "start_frames": [
+    "xyz[499]",
+    "xyz[399]",
+    "xyz[299]",
+    "xyz[199]"
+   ],
+   "head_mtime_at_source": 1792972035.82024,
+   "backbone_mtime_at_source": 1771815204.0,
+   "current_deltaU": -74.77914390947063,
+   "cached_deltaU": -74.77914390918579,
+   "deltaU_difference": -2.8484237191150896e-10,
+   "component_max_abs_difference": {
+    "C_ML": 2.856306302589928e-10,
+    "C_ML_learned": 3.126388037344441e-13,
+    "C_ML_coul": 2.856621605928922e-10,
+    "C_MM": 8.881784197001252e-16,
+    "dU_atom": 2.8563107434820267e-10,
+    "cluster_system_indices": 0.0,
+    "omega_water_resid": 0.0
+   },
+   "same_cluster_and_omega": true,
+   "cache_reproduced": true
+  },
+  {
+   "source": "/home/ruigengji/E3D/experiments/2026-10-25_eta_hmc/runs/CyclophilinD_ligand-8/ladder_S0_start1_dense8_v1x1000.npz",
+   "tag": "_dense8_v1x1000",
+   "rep": 1,
+   "sweep": 1000,
+   "walker": 7,
+   "eta": 1.0,
+   "start_frames": [
+    "last_positions",
+    "last_positions",
+    "last_positions",
+    "last_positions",
+    "last_positions",
+    "last_positions",
+    "last_positions",
+    "last_positions"
+   ],
+   "head_mtime_at_source": 1792972035.82024,
+   "backbone_mtime_at_source": 1771815204.0,
+   "current_deltaU": -74.65412096580908,
+   "cached_deltaU": -74.65412096558245,
+   "deltaU_difference": -2.2663471099804156e-10,
+   "component_max_abs_difference": {
+    "C_ML": 4.6062709202487895e-10,
+    "C_ML_learned": 1.4921397450962104e-13,
+    "C_ML_coul": 4.6068393544373976e-10,
+    "C_MM": 8.881784197001252e-16,
+    "dU_atom": 4.6063064473855775e-10,
+    "cluster_system_indices": 0.0,
+    "omega_water_resid": 0.0
+   },
+   "same_cluster_and_omega": true,
+   "cache_reproduced": true
+  },
+  {
+   "source": "/home/ruigengji/E3D/experiments/2026-10-25_eta_hmc/runs/CyclophilinD_ligand-8/ladder_S0_start2_dense8_v1x1000.npz",
+   "tag": "_dense8_v1x1000",
+   "rep": 2,
+   "sweep": 1000,
+   "walker": 3,
+   "eta": 1.0,
+   "start_frames": [
+    "last_positions",
+    "last_positions",
+    "last_positions",
+    "last_positions",
+    "last_positions",
+    "last_positions",
+    "last_positions",
+    "last_positions"
+   ],
+   "head_mtime_at_source": 1792972035.82024,
+   "backbone_mtime_at_source": 1771815204.0,
+   "current_deltaU": -77.28189194031413,
+   "cached_deltaU": -77.2818919392603,
+   "deltaU_difference": -1.0538201422605198e-09,
+   "component_max_abs_difference": {
+    "C_ML": 2.7208457709093636e-10,
+    "C_ML_learned": 1.3500311979441904e-13,
+    "C_ML_coul": 2.7208102437725756e-10,
+    "C_MM": 0.0,
+    "dU_atom": 2.7208457709093636e-10,
+    "cluster_system_indices": 0.0,
+    "omega_water_resid": 0.0
+   },
+   "same_cluster_and_omega": true,
+   "cache_reproduced": true
+  },
+  {
+   "source": "/home/ruigengji/E3D/experiments/2026-10-25_eta_hmc/runs/CyclophilinD_ligand-8/ladder_S0_start3_dense8_v1x1000.npz",
+   "tag": "_dense8_v1x1000",
+   "rep": 3,
+   "sweep": 1000,
+   "walker": 5,
+   "eta": 1.0,
+   "start_frames": [
+    "last_positions",
+    "last_positions",
+    "last_positions",
+    "last_positions",
+    "last_positions",
+    "last_positions",
+    "last_positions",
+    "last_positions"
+   ],
+   "head_mtime_at_source": 1792972035.82024,
+   "backbone_mtime_at_source": 1771815204.0,
+   "current_deltaU": -82.36463867753613,
+   "cached_deltaU": -82.36463867918499,
+   "deltaU_difference": 1.648857050895458e-09,
+   "component_max_abs_difference": {
+    "C_ML": 5.744880127167562e-10,
+    "C_ML_learned": 2.6290081223123707e-13,
+    "C_ML_coul": 5.74225111904525e-10,
+    "C_MM": 8.881784197001252e-16,
+    "dU_atom": 5.744880127167562e-10,
+    "cluster_system_indices": 0.0,
+    "omega_water_resid": 0.0
+   },
+   "same_cluster_and_omega": true,
+   "cache_reproduced": true
+  },
+  {
+   "source": "/home/ruigengji/E3D/experiments/2026-10-25_eta_hmc/runs/CyclophilinD_ligand-8/ladder_S0_start4_dense8_v1x1000.npz",
+   "tag": "_dense8_v1x1000",
+   "rep": 4,
+   "sweep": 1000,
+   "walker": 0,
+   "eta": 1.0,
+   "start_frames": [
+    "last_positions",
+    "last_positions",
+    "last_positions",
+    "last_positions",
+    "last_positions",
+    "last_positions",
+    "last_positions",
+    "last_positions"
+   ],
+   "head_mtime_at_source": 1792972035.82024,
+   "backbone_mtime_at_source": 1771815204.0,
+   "current_deltaU": -76.55180778780101,
+   "cached_deltaU": -76.55180778674884,
+   "deltaU_difference": -1.0521716831135564e-09,
+   "component_max_abs_difference": {
+    "C_ML": 5.632827537738194e-10,
+    "C_ML_learned": 1.0613732115416497e-13,
+    "C_ML_coul": 5.633649102776417e-10,
+    "C_MM": 4.440892098500626e-16,
+    "dU_atom": 5.632827537738194e-10,
+    "cluster_system_indices": 0.0,
+    "omega_water_resid": 0.0
+   },
+   "same_cluster_and_omega": true,
+   "cache_reproduced": true
+  }
+ ],
+ "all_caches_reproduced": true,
+ "note": "same-frame cache/target consistency only, not physical accuracy or basin population"
+}

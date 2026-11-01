@@ -1,0 +1,62 @@
+{
+  "device": "cpu",
+  "dtype": "float32",
+  "variant": "scalar",
+  "torch": "2.12.0",
+  "threads": 2,
+  "source_sha256": {
+    "/home/ruigengji/E3D/decomp/lambda_mask.py": "ee040c0db9b773fe844f5fb910d8358636d758d4ff46f4705467a4252e80cfe2",
+    "/home/ruigengji/E3D/decomp/openmm_bridge.py": "61e29672ab4c9b12bb0eb44183ee86e1c0980b996d61f7e1b58946e2b6a04bf0",
+    "/home/ruigengji/E3D/decomp/mlmm.py": "0656a584dda6436f452a528572b7584aef605dea2d591d1e75ddcc7bd70dce58",
+    "/home/ruigengji/E3D/decomp/fires.py": "6c39ee24f74f9731e7fc422a07a397bfec8c07271568e03ea0dfaabe4933464c",
+    "/home/ruigengji/E3D/decomp/polar_es.py": "01b3be1a043872fdd2df4c6e9c90bb309284c932547f4f6f2aa7884dc089c489"
+  },
+  "purpose": "fixed-frame equivalence and CPU force latency, not GPU speed or scientific acceptance",
+  "cases": [
+    {
+      "path": "legacy",
+      "q": 1.5,
+      "passed": true,
+      "energy_error_kj_mol": 0.0,
+      "force_error_kj_mol_ang": 0.03176116943359375,
+      "timings_s": {
+        "reference": [
+          3.366047963965684
+        ],
+        "optimized": [
+          3.3655347320018336
+        ]
+      },
+      "energy_tolerance": 2.1759221482729902,
+      "force_tolerance": 0.05,
+      "cpu_latency_ratio": 1.0001524964098485
+    },
+    {
+      "path": "legacy",
+      "q": 2.5,
+      "passed": true,
+      "energy_error_kj_mol": 0.0,
+      "force_error_kj_mol_ang": 0.039455413818359375,
+      "timings_s": {
+        "reference": [
+          3.358015689998865
+        ],
+        "optimized": [
+          3.3443944610189646
+        ]
+      },
+      "energy_tolerance": 2.1759221482729902,
+      "force_tolerance": 0.05,
+      "cpu_latency_ratio": 1.004072853587896
+    },
+    {
+      "path": "D19",
+      "q": 1.5,
+      "passed": false,
+      "energy_error_kj_mol": 0.0,
+      "force_error_kj_mol_ang": 0.05691593885421753,
+      "energy_tolerance": 2.1759221482729902,
+      "force_tolerance": 0.05
+    }
+  ]
+}

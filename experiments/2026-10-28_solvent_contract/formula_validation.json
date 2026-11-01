@@ -1,0 +1,68 @@
+{
+  "kind": "independent exact finite-state validation; no molecular sampling acceptance",
+  "checks_passed": [
+    "atomic_endpoint_eta_TI_vs_exact_partition_ratio",
+    "atomic_MM_TI_vs_exact_partition_difference",
+    "step_atom_matrix_closure",
+    "endpoint_corrections_telescope",
+    "all_dummy_analytic_zero",
+    "same_total_different_group_order_attributions",
+    "cross_group_response_retained",
+    "chemical_grouping_not_confused_with_removal_steps",
+    "wrong_atom_EXP_rejected",
+    "wrong_ensemble_negative_control",
+    "common_energy_offset",
+    "incomplete_eta_nonfinite_and_shape_input_rejected",
+    "diagonal_TI_not_assumed_equal_to_permutation_average"
+  ],
+  "max_step_error": 8.881784197001252e-16,
+  "grid_max_step_error": 4.349093718492014e-08,
+  "forward_step_atom": [
+    [
+      -0.3175918194453053,
+      -2.0186981880217245,
+      -0.08679437554351256
+    ],
+    [
+      0.0,
+      0.0,
+      0.9878774930096439
+    ]
+  ],
+  "forward_step_totals": [
+    -2.423084383010542,
+    0.9878774930096439
+  ],
+  "forward_atom_totals": [
+    -0.3175918194453053,
+    -2.0186981880217245,
+    0.9010831174661313
+  ],
+  "reverse_atom_totals": [
+    0.9124658884595209,
+    -1.4603512370653124,
+    -0.8873215413951068
+  ],
+  "forward_chemical_group_totals": [
+    -2.3362900074670296,
+    0.9010831174661313
+  ],
+  "total": -1.4352068900008983,
+  "cross_group_step1_atom2": -0.08679437554351256,
+  "wrong_independent_EXP_error": 1.6018740620133447,
+  "wrong_ensemble_error": 0.3116833937520249,
+  "shapley_counterexample": {
+    "diagonal_atomic_TI": [
+      -0.0045864314576118444,
+      -0.5954597600630416,
+      0.07637257812062974
+    ],
+    "permutation_average": [
+      -0.08233413284778661,
+      -0.4430285550722341,
+      0.0016890745199965214
+    ],
+    "max_difference": 0.15243120499080748,
+    "scope": "finite-state counterexample, not the molecular target"
+  }
+}

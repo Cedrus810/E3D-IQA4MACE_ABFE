@@ -1,0 +1,42 @@
+{
+  "kind": "exact finite-state mathematical validation; not molecular data",
+  "sampling_states": 3,
+  "groups": 2,
+  "atoms": 3,
+  "checks_passed": [
+    "all_state_partition_functions",
+    "weighted_adjacent_differences",
+    "group_closure",
+    "total_closure",
+    "independent_atomic_integrals",
+    "energy_offset_invariance",
+    "wrong_ensemble_negative_control"
+  ],
+  "exact_state_free_energies_relative_to_S0": [
+    0.0,
+    -0.4677179330692355,
+    -0.7136530668099242
+  ],
+  "estimated_state_free_energies_relative_to_S0": [
+    0.0,
+    -0.4677179330692356,
+    -0.7136530668099246
+  ],
+  "group_delta_f": [
+    -0.4677179330692356,
+    -0.24593513374068898
+  ],
+  "atom_delta_f": [
+    0.056986654083452264,
+    -0.524704587152688,
+    -0.24593513374068865
+  ],
+  "total_delta_f": -0.7136530668099246,
+  "total_closure_error": 2.220446049250313e-16,
+  "uncorrected_maximum_step_error": 0.013836186345330681,
+  "adjacent_overlap": [
+    0.9994537374797197,
+    0.91142909403706
+  ],
+  "physical_validation": "not_assessed"
+}

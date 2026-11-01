@@ -1,0 +1,553 @@
+{
+  "kind": "read-only stored-chain diagnosis; no energy queries / model / MD",
+  "source": "/home/ruigengji/E3D/experiments/2026-10-25_eta_hmc/runs/CyclophilinD_ligand-8/chain_S0_eta0.500_start1_smoke_cuda.npz",
+  "topology_labels": "/home/ruigengji/E3D/data/solvent_legs_ibs/CyclophilinD_ligand-8/rep1/topology_solvent.cif",
+  "head": "/home/ruigengji/E3D/runs/polar-M/ckpt/joint_organic_n50000_c10000_lampool400_solvent_es_h256_s60000_N.pt",
+  "eta": 0.5,
+  "T_K": 300.0,
+  "units": "kJ/mol; distances nm",
+  "accepted_cycles": [
+    1,
+    2,
+    3,
+    5,
+    6
+  ],
+  "frozen_delta_U": -122.74474185209797,
+  "step_5_to_6": {
+    "from_cycle": 5,
+    "to_cycle": 6,
+    "change_delta_U": -25.21043617484449,
+    "change_C_ML": -17.736086933432365,
+    "change_C_MM_Coulomb": -0.4913713903316408,
+    "change_C_MM_LJ": 7.965720631743751,
+    "change_V": -170.84466109235655,
+    "change_U_eta": -183.4498791797788,
+    "dH": 0.28921260667266324,
+    "acceptance_probability": 1.0,
+    "ligand_RMS_move_nm": 0.02081269258963476,
+    "ligand_aligned_RMS_change_nm": 0.018952522789094966,
+    "omega_resid_in": [
+      206,
+      1396,
+      1400
+    ],
+    "omega_resid_out": [
+      668,
+      758,
+      2208
+    ]
+  },
+  "group_changes": [
+    {
+      "group": 1,
+      "change_C_ML": -8.031492717230272,
+      "change_C_MM_Coulomb": 5.657644594089987,
+      "change_C_MM_LJ": 11.0097892862767,
+      "change_delta_u": -24.69892659759695
+    },
+    {
+      "group": 2,
+      "change_C_ML": -10.047963109221689,
+      "change_C_MM_Coulomb": 1.4375468839224652,
+      "change_C_MM_LJ": -3.1214789282310074,
+      "change_delta_u": -8.364031064913144
+    },
+    {
+      "group": 3,
+      "change_C_ML": 1.2839579012187425,
+      "change_C_MM_Coulomb": 8.824160951846988,
+      "change_C_MM_LJ": -0.32357205620954044,
+      "change_delta_u": -7.216630994418702
+    },
+    {
+      "group": 4,
+      "change_C_ML": -0.9405890081991477,
+      "change_C_MM_Coulomb": -16.41072382019106,
+      "change_C_MM_LJ": 0.4009823299076005,
+      "change_delta_u": 15.069152482084313
+    }
+  ],
+  "atom_changes": [
+    {
+      "atom_local": 0,
+      "system_index": 0,
+      "group": 1,
+      "element": "O",
+      "name": "O10",
+      "change_C_ML": 0.284200928965177,
+      "change_C_MM_Coulomb": 48.931426090503464,
+      "change_C_MM_LJ": 2.7453048133583584,
+      "change_delta_u": -51.39252997489665,
+      "frozen_delta_u": -28.57727780368309
+    },
+    {
+      "atom_local": 1,
+      "system_index": 1,
+      "group": 1,
+      "element": "O",
+      "name": "O1",
+      "change_C_ML": -10.104543569034021,
+      "change_C_MM_Coulomb": -9.770493909890753,
+      "change_C_MM_LJ": 1.8190602330144772,
+      "change_delta_u": -2.153109892157744,
+      "frozen_delta_u": -23.054251452841036
+    },
+    {
+      "atom_local": 2,
+      "system_index": 2,
+      "group": 2,
+      "element": "N",
+      "name": "N18",
+      "change_C_ML": -7.099852039682801,
+      "change_C_MM_Coulomb": 20.594338395620298,
+      "change_C_MM_LJ": -1.3221154844650946,
+      "change_delta_u": -26.372074950838005,
+      "frozen_delta_u": -30.156449670856592
+    },
+    {
+      "atom_local": 3,
+      "system_index": 3,
+      "group": 1,
+      "element": "N",
+      "name": "N11",
+      "change_C_ML": 0.8673850823755664,
+      "change_C_MM_Coulomb": 62.41331155506085,
+      "change_C_MM_LJ": 0.67804588614228,
+      "change_delta_u": -62.22397235882757,
+      "frozen_delta_u": -49.96108782545023
+    },
+    {
+      "atom_local": 4,
+      "system_index": 4,
+      "group": 1,
+      "element": "N",
+      "name": "N3",
+      "change_C_ML": 2.4743428269982806,
+      "change_C_MM_Coulomb": -11.731268958862238,
+      "change_C_MM_LJ": -1.004429764721288,
+      "change_delta_u": 15.210041550581806,
+      "frozen_delta_u": -29.224114876976053
+    },
+    {
+      "atom_local": 5,
+      "system_index": 5,
+      "group": 2,
+      "element": "C",
+      "name": "C17",
+      "change_C_ML": 1.9779099250999472,
+      "change_C_MM_Coulomb": -2.730531331414511,
+      "change_C_MM_LJ": -0.17792416583682424,
+      "change_delta_u": 4.8863654223512825,
+      "frozen_delta_u": 3.3257018923716863
+    },
+    {
+      "atom_local": 6,
+      "system_index": 6,
+      "group": 4,
+      "element": "C",
+      "name": "C12",
+      "change_C_ML": -0.3868865422810188,
+      "change_C_MM_Coulomb": -3.334707230525521,
+      "change_C_MM_LJ": 0.3287756415176082,
+      "change_delta_u": 2.619045046726894,
+      "frozen_delta_u": -6.447167441101236
+    },
+    {
+      "atom_local": 7,
+      "system_index": 7,
+      "group": 2,
+      "element": "C",
+      "name": "C16",
+      "change_C_ML": -0.8569673336342003,
+      "change_C_MM_Coulomb": -7.24612357729653,
+      "change_C_MM_LJ": 0.36145282337619644,
+      "change_delta_u": 6.027703420286134,
+      "frozen_delta_u": -9.659089329476124
+    },
+    {
+      "atom_local": 8,
+      "system_index": 8,
+      "group": 2,
+      "element": "C",
+      "name": "C15",
+      "change_C_ML": -1.2812614939939415,
+      "change_C_MM_Coulomb": -1.6579786434144461,
+      "change_C_MM_LJ": -0.527991834137933,
+      "change_delta_u": 0.9047089835584368,
+      "frozen_delta_u": -7.453149433301191
+    },
+    {
+      "atom_local": 9,
+      "system_index": 9,
+      "group": 3,
+      "element": "C",
+      "name": "C6",
+      "change_C_ML": -1.5160554158840127,
+      "change_C_MM_Coulomb": -0.8668195823798222,
+      "change_C_MM_LJ": 0.2613126852707248,
+      "change_delta_u": -0.9105485187749154,
+      "frozen_delta_u": 1.2014007300863323
+    },
+    {
+      "atom_local": 10,
+      "system_index": 10,
+      "group": 3,
+      "element": "C",
+      "name": "C7",
+      "change_C_ML": 0.18324953844568892,
+      "change_C_MM_Coulomb": -2.1292072837593317,
+      "change_C_MM_LJ": -0.39605206374971136,
+      "change_delta_u": 2.708508885954732,
+      "frozen_delta_u": 3.7398940859214624
+    },
+    {
+      "atom_local": 11,
+      "system_index": 11,
+      "group": 2,
+      "element": "C",
+      "name": "C14",
+      "change_C_ML": -0.6542954393660594,
+      "change_C_MM_Coulomb": 8.92569595124386,
+      "change_C_MM_LJ": -0.4715921340158449,
+      "change_delta_u": -9.108399256594074,
+      "frozen_delta_u": -18.435827548793203
+    },
+    {
+      "atom_local": 12,
+      "system_index": 12,
+      "group": 3,
+      "element": "C",
+      "name": "C5",
+      "change_C_ML": 2.5374032334735737,
+      "change_C_MM_Coulomb": -1.684052148846873,
+      "change_C_MM_LJ": 1.0535009569890974,
+      "change_delta_u": 3.167954425331349,
+      "frozen_delta_u": 3.0182667753723265
+    },
+    {
+      "atom_local": 13,
+      "system_index": 13,
+      "group": 3,
+      "element": "C",
+      "name": "C8",
+      "change_C_ML": -1.1199087652862314,
+      "change_C_MM_Coulomb": -5.258160892330038,
+      "change_C_MM_LJ": -0.0023860849251389205,
+      "change_delta_u": 4.1406382119689455,
+      "frozen_delta_u": 3.987527995310292
+    },
+    {
+      "atom_local": 14,
+      "system_index": 14,
+      "group": 1,
+      "element": "C",
+      "name": "C9",
+      "change_C_ML": -6.379904629447396,
+      "change_C_MM_Coulomb": -60.105384421306034,
+      "change_C_MM_LJ": 6.731662563964584,
+      "change_delta_u": 46.993817227894056,
+      "frozen_delta_u": 18.632613265340602
+    },
+    {
+      "atom_local": 15,
+      "system_index": 15,
+      "group": 1,
+      "element": "C",
+      "name": "C2",
+      "change_C_ML": -0.8182361588029252,
+      "change_C_MM_Coulomb": -14.177044029020792,
+      "change_C_MM_LJ": 0.5741605688158935,
+      "change_delta_u": 12.784647301401971,
+      "frozen_delta_u": 18.40042790037867
+    },
+    {
+      "atom_local": 16,
+      "system_index": 16,
+      "group": 2,
+      "element": "C",
+      "name": "C13",
+      "change_C_ML": -2.603410648384364,
+      "change_C_MM_Coulomb": -24.92726852175303,
+      "change_C_MM_LJ": -0.02031487388068509,
+      "change_delta_u": 22.344172747249353,
+      "frozen_delta_u": 23.83768774436196
+    },
+    {
+      "atom_local": 17,
+      "system_index": 17,
+      "group": 3,
+      "element": "C",
+      "name": "C4",
+      "change_C_ML": 1.046983479672614,
+      "change_C_MM_Coulomb": 4.190645632885357,
+      "change_C_MM_LJ": 0.1168792433712662,
+      "change_delta_u": -3.2605413965840095,
+      "frozen_delta_u": 2.2669116167896566
+    },
+    {
+      "atom_local": 18,
+      "system_index": 18,
+      "group": 1,
+      "element": "H",
+      "name": "H1",
+      "change_C_ML": 3.4316076135634805,
+      "change_C_MM_Coulomb": -29.00623048499902,
+      "change_C_MM_LJ": -0.03215966732309644,
+      "change_delta_u": 32.469997765885594,
+      "frozen_delta_u": 15.684915511472441
+    },
+    {
+      "atom_local": 19,
+      "system_index": 19,
+      "group": 1,
+      "element": "H",
+      "name": "H2",
+      "change_C_ML": 2.2136551881515665,
+      "change_C_MM_Coulomb": 19.103328752604497,
+      "change_C_MM_LJ": -0.5018553469745104,
+      "change_delta_u": -16.387818217478422,
+      "frozen_delta_u": 14.922875296696702
+    },
+    {
+      "atom_local": 20,
+      "system_index": 20,
+      "group": 2,
+      "element": "H",
+      "name": "H3",
+      "change_C_ML": 0.06999572693826295,
+      "change_C_MM_Coulomb": -0.1874918667695855,
+      "change_C_MM_LJ": -0.7716745165190929,
+      "change_delta_u": 1.0291621102269408,
+      "frozen_delta_u": -6.157237284930533
+    },
+    {
+      "atom_local": 21,
+      "system_index": 21,
+      "group": 4,
+      "element": "H",
+      "name": "H4",
+      "change_C_ML": -2.0758587823393966,
+      "change_C_MM_Coulomb": -8.180384491680137,
+      "change_C_MM_LJ": -0.15116447212709194,
+      "change_delta_u": 6.255690181467832,
+      "frozen_delta_u": 2.9060993030357993
+    },
+    {
+      "atom_local": 22,
+      "system_index": 22,
+      "group": 4,
+      "element": "H",
+      "name": "H5",
+      "change_C_ML": 1.5221563164212677,
+      "change_C_MM_Coulomb": -4.895632097985403,
+      "change_C_MM_LJ": 0.22337116051708428,
+      "change_delta_u": 6.194417253889586,
+      "frozen_delta_u": 2.6596186074560046
+    },
+    {
+      "atom_local": 23,
+      "system_index": 23,
+      "group": 2,
+      "element": "H",
+      "name": "H6",
+      "change_C_ML": 2.710575550511771,
+      "change_C_MM_Coulomb": 8.58610020528847,
+      "change_C_MM_LJ": 0.05644450793652922,
+      "change_delta_u": -5.931969162713228,
+      "frozen_delta_u": -3.2122574211652637
+    },
+    {
+      "atom_local": 24,
+      "system_index": 24,
+      "group": 2,
+      "element": "H",
+      "name": "H7",
+      "change_C_ML": -0.6298275875701611,
+      "change_C_MM_Coulomb": 5.514211281675408,
+      "change_C_MM_LJ": -0.24370547524948316,
+      "change_delta_u": -5.900333393996085,
+      "frozen_delta_u": 3.107895111535232
+    },
+    {
+      "atom_local": 25,
+      "system_index": 25,
+      "group": 3,
+      "element": "H",
+      "name": "H8",
+      "change_C_ML": 1.0972699071077248,
+      "change_C_MM_Coulomb": -0.3054850397279547,
+      "change_C_MM_LJ": 1.581160527082306,
+      "change_delta_u": -0.17840558024662645,
+      "frozen_delta_u": -4.36068292545854
+    },
+    {
+      "atom_local": 26,
+      "system_index": 26,
+      "group": 3,
+      "element": "H",
+      "name": "H9",
+      "change_C_ML": -2.320813141980582,
+      "change_C_MM_Coulomb": 0.5974761800121491,
+      "change_C_MM_LJ": -3.657295549907551,
+      "change_delta_u": 0.7390062279148193,
+      "frozen_delta_u": -8.323143939899765
+    },
+    {
+      "atom_local": 27,
+      "system_index": 27,
+      "group": 3,
+      "element": "H",
+      "name": "H10",
+      "change_C_ML": -0.03884013899403094,
+      "change_C_MM_Coulomb": 1.7428323988667662,
+      "change_C_MM_LJ": -1.1443256429288002,
+      "change_delta_u": -0.6373468949319969,
+      "frozen_delta_u": -5.4022334699496755
+    },
+    {
+      "atom_local": 28,
+      "system_index": 28,
+      "group": 3,
+      "element": "H",
+      "name": "H11",
+      "change_C_ML": -1.0587571358267487,
+      "change_C_MM_Coulomb": -0.49753534910757513,
+      "change_C_MM_LJ": -0.06267669083418981,
+      "change_delta_u": -0.49854509588498397,
+      "frozen_delta_u": -2.670199741242842
+    },
+    {
+      "atom_local": 29,
+      "system_index": 29,
+      "group": 2,
+      "element": "H",
+      "name": "H12",
+      "change_C_ML": -1.680829769140141,
+      "change_C_MM_Coulomb": -5.433405009257468,
+      "change_C_MM_LJ": -0.004057775438775391,
+      "change_delta_u": 3.756633015556103,
+      "frozen_delta_u": 2.994821468473118
+    },
+    {
+      "atom_local": 30,
+      "system_index": 30,
+      "group": 3,
+      "element": "H",
+      "name": "H13",
+      "change_C_ML": 1.4035359116599837,
+      "change_C_MM_Coulomb": 0.36324379738964474,
+      "change_C_MM_LJ": 1.816954127823313,
+      "change_delta_u": -0.7766620135529743,
+      "frozen_delta_u": -3.327704328510627
+    },
+    {
+      "atom_local": 31,
+      "system_index": 31,
+      "group": 3,
+      "element": "H",
+      "name": "H14",
+      "change_C_ML": -0.3992064708087284,
+      "change_C_MM_Coulomb": 0.36245812289426027,
+      "change_C_MM_LJ": -0.1489362455285399,
+      "change_delta_u": -0.6127283481744485,
+      "frozen_delta_u": -2.454061657967047
+    },
+    {
+      "atom_local": 32,
+      "system_index": 32,
+      "group": 3,
+      "element": "H",
+      "name": "H15",
+      "change_C_ML": 0.4409315808677432,
+      "change_C_MM_Coulomb": 3.7289556308526346,
+      "change_C_MM_LJ": 0.21907895986741865,
+      "change_delta_u": -3.5071030098523104,
+      "frozen_delta_u": -1.7891801895309232
+    },
+    {
+      "atom_local": 33,
+      "system_index": 33,
+      "group": 3,
+      "element": "H",
+      "name": "H16",
+      "change_C_ML": 0.5038594102090492,
+      "change_C_MM_Coulomb": 3.21134681228035,
+      "change_C_MM_LJ": 0.002210201305388404,
+      "change_delta_u": -2.709697603376689,
+      "frozen_delta_u": -2.390498191529363
+    },
+    {
+      "atom_local": 34,
+      "system_index": 34,
+      "group": 3,
+      "element": "H",
+      "name": "H17",
+      "change_C_ML": 0.5243059085626993,
+      "change_C_MM_Coulomb": 5.368462672817418,
+      "change_C_MM_LJ": 0.03700351995487616,
+      "change_delta_u": -4.881160284209595,
+      "frozen_delta_u": -0.37578462403698065
+    }
+  ],
+  "post6": {
+    "cycles": 54,
+    "dH_range": [
+      -5.5086757088283775,
+      6.053285053480067
+    ],
+    "proposal_delta_U_range": [
+      15.47374553939548,
+      69.94544995867776
+    ],
+    "acceptance_probability_quantiles_0_25_50_75_100": [
+      4.164902992877424e-07,
+      3.2806295034976326e-05,
+      9.858192340153763e-05,
+      0.0006757935504908936,
+      0.08008780039089737
+    ],
+    "sum_of_recorded_proposal_accept_probabilities": 0.2427153789827364
+  },
+  "acceptance_decisions_reconstructed": true,
+  "final_acceptance_RNG_matches": true,
+  "post6_recorded_fields_identical": {
+    "dU_atom": true,
+    "C_ML": true,
+    "C_MM": true,
+    "omega_water_resid": true,
+    "cluster_system_indices": true,
+    "lig_xyz": true,
+    "dU": true
+  },
+  "all_full_box_snapshots_identical": true,
+  "post6_V_peak_to_peak_kJmol": 6.70273439027369e-05,
+  "full_box_snapshot_cycles": [
+    10,
+    20,
+    30,
+    40,
+    50,
+    60
+  ],
+  "geometry": {
+    "min_ligand_heavy_water_O_nm": 0.26698779406911466,
+    "ligand_system_index": 0,
+    "water_residue_index": 586,
+    "rank50_water": [
+      0.3741952909252284,
+      824
+    ],
+    "rank51_water": [
+      0.3844593982816492,
+      668
+    ]
+  },
+  "limits": [
+    "No rejected-proposal coordinates or per-atom proposal energies were saved.",
+    "No full-box state before cycle 6 is saved in this chain.",
+    "C_ML combines learned channels and explicit Coulomb; they cannot be separated here.",
+    "This smoke used the original head, not resp_v2 or nvar.",
+    "No claim of a physical metastable basin, collapse, or convergence follows from 60 cycles."
+  ]
+}

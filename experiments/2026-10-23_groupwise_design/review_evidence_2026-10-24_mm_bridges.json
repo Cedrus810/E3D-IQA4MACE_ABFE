@@ -1,0 +1,134 @@
+{
+  "revision": "2026-10-24 MM bridges and local endpoint model corrections",
+  "scope": "existing MM JSON recheck and independently enumerable algebra only; no molecular computation",
+  "existing_endpoint_mm_evidence": [
+    {
+      "system": "PWWP1_ligand-8",
+      "step": 1,
+      "temperature_K": 300,
+      "n_forward": 500,
+      "n_reverse": 500,
+      "forward_exp_kj_mol": 0.8574487599270046,
+      "reverse_exp_kj_mol": -19.880384440745694,
+      "forward_minus_reverse_kj_mol": 20.737833200672696,
+      "source": "fep_PWWP1_ligand-8.json"
+    },
+    {
+      "system": "PWWP1_ligand-8",
+      "step": 2,
+      "temperature_K": 300,
+      "n_forward": 500,
+      "n_reverse": 500,
+      "forward_exp_kj_mol": 54.74782635508491,
+      "reverse_exp_kj_mol": 15.273282516355247,
+      "forward_minus_reverse_kj_mol": 39.474543838729666,
+      "source": "fep_PWWP1_ligand-8.json"
+    },
+    {
+      "system": "PWWP1_ligand-8",
+      "step": 3,
+      "temperature_K": 300,
+      "n_forward": 500,
+      "n_reverse": 500,
+      "forward_exp_kj_mol": 48.58305042876215,
+      "reverse_exp_kj_mol": -3397.2535924205276,
+      "forward_minus_reverse_kj_mol": 3445.83664284929,
+      "source": "fep_PWWP1_ligand-8.json"
+    },
+    {
+      "system": "PWWP1_ligand-8",
+      "step": 4,
+      "temperature_K": 300,
+      "n_forward": 500,
+      "n_reverse": 500,
+      "forward_exp_kj_mol": 51.265139917469654,
+      "reverse_exp_kj_mol": -1500.410178121947,
+      "forward_minus_reverse_kj_mol": 1551.6753180394167,
+      "source": "fep_PWWP1_ligand-8.json"
+    },
+    {
+      "system": "CyclophilinD_ligand-8",
+      "step": 1,
+      "temperature_K": 300,
+      "n_forward": 500,
+      "n_reverse": 500,
+      "forward_exp_kj_mol": 93.30200617118214,
+      "reverse_exp_kj_mol": -152.7401289154141,
+      "forward_minus_reverse_kj_mol": 246.04213508659623,
+      "source": "fep_CyclophilinD_ligand-8.json"
+    },
+    {
+      "system": "CyclophilinD_ligand-8",
+      "step": 2,
+      "temperature_K": 300,
+      "n_forward": 500,
+      "n_reverse": 500,
+      "forward_exp_kj_mol": 57.24005348984811,
+      "reverse_exp_kj_mol": -371.5054630341518,
+      "forward_minus_reverse_kj_mol": 428.74551652399987,
+      "source": "fep_CyclophilinD_ligand-8.json"
+    },
+    {
+      "system": "CyclophilinD_ligand-8",
+      "step": 3,
+      "temperature_K": 300,
+      "n_forward": 500,
+      "n_reverse": 500,
+      "forward_exp_kj_mol": 49.55721639079528,
+      "reverse_exp_kj_mol": -7607.468622666366,
+      "forward_minus_reverse_kj_mol": 7657.025839057162,
+      "source": "fep_CyclophilinD_ligand-8.json"
+    },
+    {
+      "system": "CyclophilinD_ligand-8",
+      "step": 4,
+      "temperature_K": 300,
+      "n_forward": 500,
+      "n_reverse": 500,
+      "forward_exp_kj_mol": 11.722346784740886,
+      "reverse_exp_kj_mol": -20.580613747103342,
+      "forward_minus_reverse_kj_mol": 32.30296053184423,
+      "source": "fep_CyclophilinD_ligand-8.json"
+    }
+  ],
+  "minimum_exp_gap_kj_mol": 20.737833200672696,
+  "maximum_exp_gap_kj_mol": 7657.025839057162,
+  "minimum_gap_in_RT_at_300K": 8.313960125247025,
+  "real_sigma_E_minus_V": null,
+  "real_sigma_status": "not measured: matched local MM term extractor is unimplemented",
+  "lj_interpretation": "consistent with source formula and existing short-contact log; no new force-term attribution",
+  "synthetic_validation": {
+    "units": "kBT",
+    "n_configurations": 4,
+    "n_report_endpoints": 3,
+    "model_evaluated_only_at_endpoints": true,
+    "checks_passed": [
+      "matched local energy difference",
+      "pointwise shared-background cancellation",
+      "endpoint corrections vs independent partition sums",
+      "all-dummy identity",
+      "population BAR on each synthetic MM bridge edge",
+      "MM bridge endpoint sum",
+      "model increments from bridge plus endpoint corrections",
+      "shared endpoint telescoping",
+      "E=V zero-correction limit",
+      "model changes alter target total",
+      "binding sign"
+    ],
+    "exact_model_steps": [
+      0.5260008227174534,
+      0.30125075238362353
+    ],
+    "bridge_plus_correction_steps": [
+      0.5260008227174534,
+      0.3012507523836234
+    ],
+    "endpoint_corrections": [
+      0.12663690990052134,
+      -0.07647943526814072,
+      -0.0
+    ],
+    "exact_model_total": 0.8272515751010769,
+    "scope_limit": "population BAR and exact enumeration; no production sampler, estimator, or sampling convergence validated"
+  }
+}

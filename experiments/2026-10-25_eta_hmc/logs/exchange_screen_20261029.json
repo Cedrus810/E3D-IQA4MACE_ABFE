@@ -1,0 +1,138 @@
+{
+ "scope": "retrospective energy screen, NOT observed exchange, equilibrium acceptance, transport or mixing evidence",
+ "temperature_K": 300,
+ "energy_units": "kJ/mol",
+ "head": "/home/ruigengji/E3D/runs/polar-M/ckpt/joint_organic_n50000_c10000_lampool400_solvent_es_resp_v2_h256_s104000_nvar_N.pt",
+ "sources": [
+  "experiments/2026-10-25_head_retrain/logs/validate_CyclophilinD_ligand-8_allheads_20261028.npz",
+  "experiments/2026-10-25_eta_hmc/runs/CyclophilinD_ligand-8/chain_S0_eta0.500_start1_nvarb_ms.npz",
+  "experiments/2026-10-25_eta_hmc/runs/CyclophilinD_ligand-8/chain_S0_eta0.500_start2_nvarb_ms.npz",
+  "experiments/2026-10-25_eta_hmc/runs/CyclophilinD_ligand-8/chain_S0_eta0.500_start3_nvarb_ms.npz",
+  "experiments/2026-10-25_eta_hmc/runs/CyclophilinD_ligand-8/chain_S0_eta0.500_start4_nvarb_ms.npz",
+  "experiments/2026-10-25_eta_hmc/runs/CyclophilinD_ligand-8/chain_S0_eta1.000_start1_nvarb_ms.npz",
+  "experiments/2026-10-25_eta_hmc/runs/CyclophilinD_ligand-8/chain_S0_eta1.000_start2_nvarb_ms.npz",
+  "experiments/2026-10-25_eta_hmc/runs/CyclophilinD_ligand-8/chain_S0_eta1.000_start3_nvarb_ms.npz",
+  "experiments/2026-10-25_eta_hmc/runs/CyclophilinD_ligand-8/chain_S0_eta1.000_start4_nvarb_ms.npz"
+ ],
+ "eta0_source": "40 saved held-out MM t=0 configurations; not an eta0 trajectory",
+ "eta_positive_source": "non-mixed nvarb_ms chains, retaining rejected repeats, discard first 100/500 cycles",
+ "formula_log_ratio": "(eta_a-eta_b)*(dU_a-dU_b)/RT",
+ "start_order": [
+  1,
+  2,
+  3,
+  4
+ ],
+ "pairs": {
+  "0.0->0.5": {
+   "eta_a": 0.0,
+   "eta_b": 0.5,
+   "mean_probability_matrix_rows_a_cols_b": [
+    [
+     0.12475105962289698,
+     0.10997767224606571,
+     0.01040196763888225,
+     0.10455641146188836
+    ],
+    [
+     0.14841747600925936,
+     0.13477384903884895,
+     0.02235731739342268,
+     0.12774018386180974
+    ],
+    [
+     0.13196595410912487,
+     0.10610147997232747,
+     0.008440456879974223,
+     0.11196341782779601
+    ],
+    [
+     0.15128300158866081,
+     0.12383285527712176,
+     0.01059791386682929,
+     0.1257072271880204
+    ]
+   ],
+   "min": 0.008440456879974223,
+   "max": 0.15128300158866081
+  },
+  "0.5->1.0": {
+   "eta_a": 0.5,
+   "eta_b": 1.0,
+   "mean_probability_matrix_rows_a_cols_b": [
+    [
+     0.11284921052033078,
+     0.1133509514211233,
+     0.4825944160855826,
+     0.4925651263463369
+    ],
+    [
+     0.07195315294200288,
+     0.07409324334046018,
+     0.45672848726769605,
+     0.4640841264237625
+    ],
+    [
+     0.4704439357066224,
+     0.7153555664326433,
+     0.9599457853183274,
+     0.9389802730498479
+    ],
+    [
+     0.13672535081487544,
+     0.16292883144049902,
+     0.5342080746907751,
+     0.542291111264411
+    ]
+   ],
+   "min": 0.07195315294200288,
+   "max": 0.9599457853183274
+  },
+  "0.0->1.0": {
+   "eta_a": 0.0,
+   "eta_b": 1.0,
+   "mean_probability_matrix_rows_a_cols_b": [
+    [
+     0.0001987404647309283,
+     0.00014270940558436663,
+     0.0049693890331728085,
+     0.020002192195733282
+    ],
+    [
+     0.0020397186549341606,
+     0.001464659133202169,
+     0.05100197148230979,
+     0.05056070657572241
+    ],
+    [
+     7.592312802965248e-05,
+     5.451805944947713e-05,
+     0.0018984133920867054,
+     0.014588318028420873
+    ],
+    [
+     0.00015616553397284464,
+     0.00011213765931463892,
+     0.0039048278010968113,
+     0.018041318790255396
+    ]
+   ],
+   "min": 5.451805944947713e-05,
+   "max": 0.05100197148230979
+  }
+ },
+ "centroid_displacement_cycle1_to500_nm": {
+  "_nvarb_ms": [
+   0.029271507170656495,
+   0.05403352562145174,
+   0.018430102811291687,
+   0.03795272200880594
+  ],
+  "_nvarb_L5": [
+   0.007874339398120838,
+   0.019717666287257435,
+   0.01462854353900578,
+   0.005504829766425268
+  ]
+ }
+}

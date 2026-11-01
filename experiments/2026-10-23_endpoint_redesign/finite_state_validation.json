@@ -1,0 +1,46 @@
+{
+  "status": "diagnostics_passed",
+  "development_prototype": true,
+  "physical_validation": "not_assessed",
+  "uncertainty": null,
+  "units": "reduced",
+  "delta_f_nbb": -0.005138382969100177,
+  "delta_f": -0.005138382969027688,
+  "component_delta_f": [
+    -0.01717342272849136,
+    -0.23554660627172783,
+    0.24758164603119034
+  ],
+  "source_target_corrections": [
+    -0.34077298239805387,
+    -0.345911365367054
+  ],
+  "source_target_weight_stats": [
+    {
+      "ess": 869.7905690262911,
+      "ess_fraction": 0.869790569026291,
+      "max_weight": 0.0017659078663940805
+    },
+    {
+      "ess": 749.8311031660527,
+      "ess_fraction": 0.7498311031660526,
+      "max_weight": 0.0017472820021968297
+    }
+  ],
+  "bennett_overlap": 0.7777000639837304,
+  "minimum_ess": 749.8311031660527,
+  "minimum_ess_fraction": 0.6895599890080018,
+  "maximum_weight": 0.0017659078663940805,
+  "nbb_mixture_difference": 7.248888989064284e-14,
+  "quadrature_difference": 5.551115123125783e-16,
+  "closure_error": 1.1379786002407855e-15,
+  "frame_accounting_error": 0.0,
+  "quadrature_orders": [
+    32,
+    64
+  ],
+  "support_failures": [],
+  "numerical_failures": [],
+  "validation": "exact three-state partition functions; not molecular data",
+  "exact_delta_f": -0.005138382969000423
+}

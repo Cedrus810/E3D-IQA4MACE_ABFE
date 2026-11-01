@@ -1,0 +1,1063 @@
+{
+  "metadata": {
+    "host": "fulda",
+    "torch": "2.12.0",
+    "openmm": "8.5.2",
+    "gpu": "NVIDIA GeForce RTX 5090",
+    "arguments": {
+      "leg_npz": "/home/ruigengji/E3D/experiments/2026-10-15_acetamide_leg/em_acetamide.npz",
+      "ckpt": "/home/ruigengji/E3D/runs/polar-M/ckpt/joint_organic_n50000_c10000_lampool400_solvent_es_h256_s60000_N.pt",
+      "backbone": "/home/ruigengji/MLP/mace/MACE-POLAR-1-M.model",
+      "start": null,
+      "snapshot": null,
+      "qs": [
+        0.0,
+        1.5,
+        2.0,
+        2.5,
+        3.0,
+        3.5,
+        4.0,
+        4.5,
+        5.0
+      ],
+      "n_inner": 20,
+      "steps": 10,
+      "warmup": 5,
+      "repeats": 3,
+      "profile_calls": 3,
+      "dt": 2.0,
+      "threads": 8,
+      "device": "cuda",
+      "platform": "CUDA",
+      "old_path": false,
+      "polar_shell": true,
+      "reference_forces": false,
+      "batch_fragments": true,
+      "ml_dtype": "float32",
+      "trace": false,
+      "out_dir": "experiments/2026-10-23_polar_shell/gpu_5090_nogate/polar_fast_batch"
+    },
+    "source_sha256": {
+      "/home/ruigengji/E3D/profile_mlmm.py": "c52f6f9b28a43ef37a2321acf10e0eeb0ca003254b999ac4873d364ad7cc48e3",
+      "/home/ruigengji/E3D/run_abfe.py": "c737e4f47c9c0837a4d2e5229ed249b2aa43837fc182070a60cd204ebd0fab9c",
+      "/home/ruigengji/E3D/decomp/mlmm.py": "0656a584dda6436f452a528572b7584aef605dea2d591d1e75ddcc7bd70dce58",
+      "/home/ruigengji/E3D/decomp/openmm_bridge.py": "61e29672ab4c9b12bb0eb44183ee86e1c0980b996d61f7e1b58946e2b6a04bf0",
+      "/home/ruigengji/E3D/decomp/lambda_mask.py": "ee040c0db9b773fe844f5fb910d8358636d758d4ff46f4705467a4252e80cfe2",
+      "/home/ruigengji/E3D/decomp/polar_es.py": "01b3be1a043872fdd2df4c6e9c90bb309284c932547f4f6f2aa7884dc089c489",
+      "/home/ruigengji/E3D/decomp/fires.py": "6c39ee24f74f9731e7fc422a07a397bfec8c07271568e03ea0dfaabe4933464c",
+      "/home/ruigengji/E3D/decomp/head.py": "97cd433f859e4d0b2b78a7fe37826ab250a95db36f60f6ca10b466072f437ec2"
+    },
+    "inputs": {
+      "/home/ruigengji/E3D/experiments/2026-10-15_acetamide_leg/em_acetamide.npz": {
+        "size": 138784,
+        "mtime_ns": 1792070441000000000
+      },
+      "/home/ruigengji/E3D/runs/polar-M/ckpt/joint_organic_n50000_c10000_lampool400_solvent_es_h256_s60000_N.pt": {
+        "size": 2903069,
+        "mtime_ns": 1791872787000000000
+      },
+      "/home/ruigengji/MLP/mace/MACE-POLAR-1-M.model": {
+        "size": 68133235,
+        "mtime_ns": 1771815204000000000
+      }
+    },
+    "inner_water_indices": [
+      128,
+      222,
+      373,
+      804,
+      493,
+      610,
+      341,
+      750,
+      634,
+      249,
+      331,
+      447,
+      61,
+      364,
+      553,
+      254,
+      456,
+      291,
+      620,
+      408
+    ]
+  },
+  "cases": [
+    {
+      "q": 0.0,
+      "step": {
+        "samples_s": [
+          0.4748652360867709,
+          0.47933231201022863,
+          0.4804819328710437
+        ],
+        "median_s": 0.47933231201022863,
+        "min_s": 0.4748652360867709,
+        "max_s": 0.4804819328710437
+      },
+      "force": {
+        "samples_s": [
+          0.03225068701431155,
+          0.032114865956828,
+          0.031804742058739066
+        ],
+        "median_s": 0.032114865956828,
+        "min_s": 0.031804742058739066,
+        "max_s": 0.03225068701431155
+      },
+      "stages": [
+        {
+          "stage": "force.evaluate",
+          "calls": 3,
+          "total_s": 0.09679830679669976,
+          "self_s": 0.0001522295642644167,
+          "mean_ms": 32.26610226556659
+        },
+        {
+          "stage": "force.evaluate/anchored.force",
+          "calls": 3,
+          "total_s": 0.09298646007664502,
+          "self_s": 0.0009236678015440702,
+          "mean_ms": 30.995486692215007
+        },
+        {
+          "stage": "force.evaluate/anchored.force/autograd.grad",
+          "calls": 3,
+          "total_s": 0.04062360408715904,
+          "self_s": 0.04062360408715904,
+          "mean_ms": 13.541201362386346
+        },
+        {
+          "stage": "force.evaluate/anchored.force/backbone.full",
+          "calls": 3,
+          "total_s": 0.035486754262819886,
+          "self_s": 0.03382280911318958,
+          "mean_ms": 11.82891808760663
+        },
+        {
+          "stage": "force.evaluate/anchored.force/backbone.full/coulomb.kernel",
+          "calls": 3,
+          "total_s": 0.0016639451496303082,
+          "self_s": 0.0016639451496303082,
+          "mean_ms": 0.5546483832101027
+        },
+        {
+          "stage": "force.evaluate/anchored.force/graph.build",
+          "calls": 3,
+          "total_s": 0.015952433925122023,
+          "self_s": 0.015952433925122023,
+          "mean_ms": 5.317477975040674
+        },
+        {
+          "stage": "force.evaluate/coordinates.unwrap",
+          "calls": 3,
+          "total_s": 0.00013376306742429733,
+          "self_s": 0.00013376306742429733,
+          "mean_ms": 0.04458768914143244
+        },
+        {
+          "stage": "force.evaluate/fires.force",
+          "calls": 3,
+          "total_s": 0.0035258540883660316,
+          "self_s": 0.0013242021668702364,
+          "mean_ms": 1.1752846961220105
+        },
+        {
+          "stage": "force.evaluate/fires.force/autograd.grad",
+          "calls": 3,
+          "total_s": 0.0022016519214957952,
+          "self_s": 0.0022016519214957952,
+          "mean_ms": 0.7338839738319317
+        }
+      ],
+      "ms_per_step": 47.93323120102286,
+      "ns_per_day": 3.6050146353645474,
+      "instrumentation_delta": {
+        "energy_kj_mol": 1.1306874863803387,
+        "max_force_kj_mol_ang": 0.33249545097351074
+      }
+    },
+    {
+      "q": 1.5,
+      "step": {
+        "samples_s": [
+          0.6566058499738574,
+          0.6531093518715352,
+          0.6564191640354693
+        ],
+        "median_s": 0.6564191640354693,
+        "min_s": 0.6531093518715352,
+        "max_s": 0.6566058499738574
+      },
+      "force": {
+        "samples_s": [
+          0.06436498207040131,
+          0.06421501585282385,
+          0.06424337811768055
+        ],
+        "median_s": 0.06424337811768055,
+        "min_s": 0.06421501585282385,
+        "max_s": 0.06436498207040131
+      },
+      "stages": [
+        {
+          "stage": "force.evaluate",
+          "calls": 3,
+          "total_s": 0.1935548430774361,
+          "self_s": 0.00017239688895642757,
+          "mean_ms": 64.51828102581203
+        },
+        {
+          "stage": "force.evaluate/anchored.force",
+          "calls": 3,
+          "total_s": 0.18916499009355903,
+          "self_s": 0.0016534808091819286,
+          "mean_ms": 63.05499669785301
+        },
+        {
+          "stage": "force.evaluate/anchored.force/anchored.energy",
+          "calls": 3,
+          "total_s": 0.0838808179832995,
+          "self_s": 0.0028554692398756742,
+          "mean_ms": 27.960272661099832
+        },
+        {
+          "stage": "force.evaluate/anchored.force/anchored.energy/backbone.fragments_batched",
+          "calls": 3,
+          "total_s": 0.037963597336784005,
+          "self_s": 0.03594136447645724,
+          "mean_ms": 12.654532445594668
+        },
+        {
+          "stage": "force.evaluate/anchored.force/anchored.energy/backbone.fragments_batched/coulomb.kernel",
+          "calls": 3,
+          "total_s": 0.002022232860326767,
+          "self_s": 0.002022232860326767,
+          "mean_ms": 0.6740776201089224
+        },
+        {
+          "stage": "force.evaluate/anchored.force/anchored.energy/backbone.full",
+          "calls": 3,
+          "total_s": 0.04059206321835518,
+          "self_s": 0.03525852714665234,
+          "mean_ms": 13.530687739451727
+        },
+        {
+          "stage": "force.evaluate/anchored.force/anchored.energy/backbone.full/coulomb.recorder",
+          "calls": 3,
+          "total_s": 0.005333536071702838,
+          "self_s": 4.036701284348965e-05,
+          "mean_ms": 1.7778453572342794
+        },
+        {
+          "stage": "force.evaluate/anchored.force/anchored.energy/backbone.full/coulomb.recorder/coulomb.cross",
+          "calls": 3,
+          "total_s": 0.005293169058859348,
+          "self_s": 0.0002736099995672703,
+          "mean_ms": 1.7643896862864494
+        },
+        {
+          "stage": "force.evaluate/anchored.force/anchored.energy/backbone.full/coulomb.recorder/coulomb.cross/coulomb.kernel",
+          "calls": 9,
+          "total_s": 0.005019559059292078,
+          "self_s": 0.005019559059292078,
+          "mean_ms": 0.5577287843657864
+        },
+        {
+          "stage": "force.evaluate/anchored.force/anchored.energy/head",
+          "calls": 3,
+          "total_s": 0.0024696881882846355,
+          "self_s": 0.0024696881882846355,
+          "mean_ms": 0.8232293960948786
+        },
+        {
+          "stage": "force.evaluate/anchored.force/autograd.grad",
+          "calls": 3,
+          "total_s": 0.08713673031888902,
+          "self_s": 0.08713673031888902,
+          "mean_ms": 29.045576772963006
+        },
+        {
+          "stage": "force.evaluate/anchored.force/graph.build",
+          "calls": 3,
+          "total_s": 0.016493960982188582,
+          "self_s": 0.016493960982188582,
+          "mean_ms": 5.4979869940628605
+        },
+        {
+          "stage": "force.evaluate/coordinates.unwrap",
+          "calls": 3,
+          "total_s": 0.00014612218365073204,
+          "self_s": 0.00014612218365073204,
+          "mean_ms": 0.04870739455024401
+        },
+        {
+          "stage": "force.evaluate/fires.force",
+          "calls": 3,
+          "total_s": 0.004071333911269903,
+          "self_s": 0.0014553219079971313,
+          "mean_ms": 1.3571113037566345
+        },
+        {
+          "stage": "force.evaluate/fires.force/autograd.grad",
+          "calls": 3,
+          "total_s": 0.002616012003272772,
+          "self_s": 0.002616012003272772,
+          "mean_ms": 0.8720040010909239
+        }
+      ],
+      "ms_per_step": 65.64191640354693,
+      "ns_per_day": 2.6324642769061937,
+      "instrumentation_delta": {
+        "energy_kj_mol": 0.3768958281725645,
+        "max_force_kj_mol_ang": 0.27282044291496277
+      }
+    },
+    {
+      "q": 2.0,
+      "step": {
+        "samples_s": [
+          0.6498718168586493,
+          0.6427598451264203,
+          0.645069268066436
+        ],
+        "median_s": 0.645069268066436,
+        "min_s": 0.6427598451264203,
+        "max_s": 0.6498718168586493
+      },
+      "force": {
+        "samples_s": [
+          0.06421078299172223,
+          0.06393007119186223,
+          0.06395901599898934
+        ],
+        "median_s": 0.06395901599898934,
+        "min_s": 0.06393007119186223,
+        "max_s": 0.06421078299172223
+      },
+      "stages": [
+        {
+          "stage": "force.evaluate",
+          "calls": 3,
+          "total_s": 0.19332167599350214,
+          "self_s": 0.0001642394345253706,
+          "mean_ms": 64.44055866450071
+        },
+        {
+          "stage": "force.evaluate/anchored.force",
+          "calls": 3,
+          "total_s": 0.18899972713552415,
+          "self_s": 0.0016120246145874262,
+          "mean_ms": 62.99990904517472
+        },
+        {
+          "stage": "force.evaluate/anchored.force/anchored.energy",
+          "calls": 3,
+          "total_s": 0.081679024733603,
+          "self_s": 0.002786230528727174,
+          "mean_ms": 27.226341577867668
+        },
+        {
+          "stage": "force.evaluate/anchored.force/anchored.energy/backbone.fragments_batched",
+          "calls": 3,
+          "total_s": 0.03698880202136934,
+          "self_s": 0.035007543163374066,
+          "mean_ms": 12.329600673789779
+        },
+        {
+          "stage": "force.evaluate/anchored.force/anchored.energy/backbone.fragments_batched/coulomb.kernel",
+          "calls": 3,
+          "total_s": 0.0019812588579952717,
+          "self_s": 0.0019812588579952717,
+          "mean_ms": 0.6604196193317572
+        },
+        {
+          "stage": "force.evaluate/anchored.force/anchored.energy/backbone.full",
+          "calls": 3,
+          "total_s": 0.039506238186731935,
+          "self_s": 0.034308908274397254,
+          "mean_ms": 13.168746062243978
+        },
+        {
+          "stage": "force.evaluate/anchored.force/anchored.energy/backbone.full/coulomb.recorder",
+          "calls": 3,
+          "total_s": 0.0051973299123346806,
+          "self_s": 3.6798883229494095e-05,
+          "mean_ms": 1.7324433041115601
+        },
+        {
+          "stage": "force.evaluate/anchored.force/anchored.energy/backbone.full/coulomb.recorder/coulomb.cross",
+          "calls": 3,
+          "total_s": 0.0051605310291051865,
+          "self_s": 0.0002736099995672703,
+          "mean_ms": 1.7201770097017288
+        },
+        {
+          "stage": "force.evaluate/anchored.force/anchored.energy/backbone.full/coulomb.recorder/coulomb.cross/coulomb.kernel",
+          "calls": 9,
+          "total_s": 0.004886921029537916,
+          "self_s": 0.004886921029537916,
+          "mean_ms": 0.5429912255042129
+        },
+        {
+          "stage": "force.evaluate/anchored.force/anchored.energy/head",
+          "calls": 3,
+          "total_s": 0.0023977539967745543,
+          "self_s": 0.0023977539967745543,
+          "mean_ms": 0.7992513322581848
+        },
+        {
+          "stage": "force.evaluate/anchored.force/autograd.grad",
+          "calls": 3,
+          "total_s": 0.08951085689477623,
+          "self_s": 0.08951085689477623,
+          "mean_ms": 29.83695229825874
+        },
+        {
+          "stage": "force.evaluate/anchored.force/graph.build",
+          "calls": 3,
+          "total_s": 0.016197820892557502,
+          "self_s": 0.016197820892557502,
+          "mean_ms": 5.399273630852501
+        },
+        {
+          "stage": "force.evaluate/coordinates.unwrap",
+          "calls": 3,
+          "total_s": 0.0001332762185484171,
+          "self_s": 0.0001332762185484171,
+          "mean_ms": 0.044425406182805695
+        },
+        {
+          "stage": "force.evaluate/fires.force",
+          "calls": 3,
+          "total_s": 0.004024433204904199,
+          "self_s": 0.001444932073354721,
+          "mean_ms": 1.3414777349680662
+        },
+        {
+          "stage": "force.evaluate/fires.force/autograd.grad",
+          "calls": 3,
+          "total_s": 0.0025795011315494776,
+          "self_s": 0.0025795011315494776,
+          "mean_ms": 0.8598337105164925
+        }
+      ],
+      "ms_per_step": 64.5069268066436,
+      "ns_per_day": 2.6787820867355783,
+      "instrumentation_delta": {
+        "energy_kj_mol": 0.7537916572764516,
+        "max_force_kj_mol_ang": 0.2267608642578125
+      }
+    },
+    {
+      "q": 2.5,
+      "step": {
+        "samples_s": [
+          0.6512892469763756,
+          0.6526964739896357,
+          0.654498971067369
+        ],
+        "median_s": 0.6526964739896357,
+        "min_s": 0.6512892469763756,
+        "max_s": 0.654498971067369
+      },
+      "force": {
+        "samples_s": [
+          0.0642089678440243,
+          0.06400417094118893,
+          0.06395564111880958
+        ],
+        "median_s": 0.06400417094118893,
+        "min_s": 0.06395564111880958,
+        "max_s": 0.0642089678440243
+      },
+      "stages": [
+        {
+          "stage": "force.evaluate",
+          "calls": 3,
+          "total_s": 0.1932530899066478,
+          "self_s": 0.0001674832310527563,
+          "mean_ms": 64.41769663554926
+        },
+        {
+          "stage": "force.evaluate/anchored.force",
+          "calls": 3,
+          "total_s": 0.18888013483956456,
+          "self_s": 0.0016047907993197441,
+          "mean_ms": 62.96004494652152
+        },
+        {
+          "stage": "force.evaluate/anchored.force/anchored.energy",
+          "calls": 3,
+          "total_s": 0.08375374204479158,
+          "self_s": 0.002878365805372596,
+          "mean_ms": 27.917914014930528
+        },
+        {
+          "stage": "force.evaluate/anchored.force/anchored.energy/backbone.fragments_batched",
+          "calls": 3,
+          "total_s": 0.038001836044713855,
+          "self_s": 0.035990624222904444,
+          "mean_ms": 12.667278681571284
+        },
+        {
+          "stage": "force.evaluate/anchored.force/anchored.energy/backbone.fragments_batched/coulomb.kernel",
+          "calls": 3,
+          "total_s": 0.002011211821809411,
+          "self_s": 0.002011211821809411,
+          "mean_ms": 0.670403940603137
+        },
+        {
+          "stage": "force.evaluate/anchored.force/anchored.energy/backbone.full",
+          "calls": 3,
+          "total_s": 0.040386744076386094,
+          "self_s": 0.035048570251092315,
+          "mean_ms": 13.462248025462031
+        },
+        {
+          "stage": "force.evaluate/anchored.force/anchored.energy/backbone.full/coulomb.recorder",
+          "calls": 3,
+          "total_s": 0.005338173825293779,
+          "self_s": 4.0794024243950844e-05,
+          "mean_ms": 1.7793912750979264
+        },
+        {
+          "stage": "force.evaluate/anchored.force/anchored.energy/backbone.full/coulomb.recorder/coulomb.cross",
+          "calls": 3,
+          "total_s": 0.0052973798010498285,
+          "self_s": 0.0002737150061875582,
+          "mean_ms": 1.7657932670166094
+        },
+        {
+          "stage": "force.evaluate/anchored.force/anchored.energy/backbone.full/coulomb.recorder/coulomb.cross/coulomb.kernel",
+          "calls": 9,
+          "total_s": 0.00502366479486227,
+          "self_s": 0.00502366479486227,
+          "mean_ms": 0.558184977206919
+        },
+        {
+          "stage": "force.evaluate/anchored.force/anchored.energy/head",
+          "calls": 3,
+          "total_s": 0.0024867961183190346,
+          "self_s": 0.0024867961183190346,
+          "mean_ms": 0.8289320394396782
+        },
+        {
+          "stage": "force.evaluate/anchored.force/autograd.grad",
+          "calls": 3,
+          "total_s": 0.08699969598092139,
+          "self_s": 0.08699969598092139,
+          "mean_ms": 28.999898660307128
+        },
+        {
+          "stage": "force.evaluate/anchored.force/graph.build",
+          "calls": 3,
+          "total_s": 0.01652190601453185,
+          "self_s": 0.01652190601453185,
+          "mean_ms": 5.50730200484395
+        },
+        {
+          "stage": "force.evaluate/coordinates.unwrap",
+          "calls": 3,
+          "total_s": 0.0001379998866468668,
+          "self_s": 0.0001379998866468668,
+          "mean_ms": 0.04599996221562227
+        },
+        {
+          "stage": "force.evaluate/fires.force",
+          "calls": 3,
+          "total_s": 0.0040674719493836164,
+          "self_s": 0.0014927301090210676,
+          "mean_ms": 1.3558239831278722
+        },
+        {
+          "stage": "force.evaluate/fires.force/autograd.grad",
+          "calls": 3,
+          "total_s": 0.002574741840362549,
+          "self_s": 0.002574741840362549,
+          "mean_ms": 0.8582472801208496
+        }
+      ],
+      "ms_per_step": 65.26964739896357,
+      "ns_per_day": 2.647478680921201,
+      "instrumentation_delta": {
+        "energy_kj_mol": 0.0,
+        "max_force_kj_mol_ang": 0.12564468383789062
+      }
+    },
+    {
+      "q": 3.0,
+      "step": {
+        "samples_s": [
+          0.3443541240412742,
+          0.3439948889426887,
+          0.3465928458608687
+        ],
+        "median_s": 0.3443541240412742,
+        "min_s": 0.3439948889426887,
+        "max_s": 0.3465928458608687
+      },
+      "force": {
+        "samples_s": [
+          0.03365082596428692,
+          0.03331663692370057,
+          0.033391561126336455
+        ],
+        "median_s": 0.033391561126336455,
+        "min_s": 0.03331663692370057,
+        "max_s": 0.03365082596428692
+      },
+      "stages": [
+        {
+          "stage": "force.evaluate",
+          "calls": 3,
+          "total_s": 0.10089687304571271,
+          "self_s": 0.000154158566147089,
+          "mean_ms": 33.63229101523757
+        },
+        {
+          "stage": "force.evaluate/anchored.force",
+          "calls": 3,
+          "total_s": 0.09733332879841328,
+          "self_s": 0.0024811907205730677,
+          "mean_ms": 32.44444293280443
+        },
+        {
+          "stage": "force.evaluate/anchored.force/autograd.grad",
+          "calls": 3,
+          "total_s": 0.039954642998054624,
+          "self_s": 0.039954642998054624,
+          "mean_ms": 13.318214332684875
+        },
+        {
+          "stage": "force.evaluate/anchored.force/backbone.fragments_batched",
+          "calls": 3,
+          "total_s": 0.03852855018340051,
+          "self_s": 0.03649427532218397,
+          "mean_ms": 12.842850061133504
+        },
+        {
+          "stage": "force.evaluate/anchored.force/backbone.fragments_batched/coulomb.kernel",
+          "calls": 3,
+          "total_s": 0.002034274861216545,
+          "self_s": 0.002034274861216545,
+          "mean_ms": 0.6780916204055151
+        },
+        {
+          "stage": "force.evaluate/anchored.force/graph.build",
+          "calls": 3,
+          "total_s": 0.016368944896385074,
+          "self_s": 0.016368944896385074,
+          "mean_ms": 5.456314965461691
+        },
+        {
+          "stage": "force.evaluate/coordinates.unwrap",
+          "calls": 3,
+          "total_s": 0.00013090274296700954,
+          "self_s": 0.00013090274296700954,
+          "mean_ms": 0.043634247655669846
+        },
+        {
+          "stage": "force.evaluate/fires.force",
+          "calls": 3,
+          "total_s": 0.003278482938185334,
+          "self_s": 0.00143589754588902,
+          "mean_ms": 1.092827646061778
+        },
+        {
+          "stage": "force.evaluate/fires.force/autograd.grad",
+          "calls": 3,
+          "total_s": 0.0018425853922963142,
+          "self_s": 0.0018425853922963142,
+          "mean_ms": 0.6141951307654381
+        }
+      ],
+      "ms_per_step": 34.43541240412742,
+      "ns_per_day": 5.018090039754779,
+      "instrumentation_delta": {
+        "energy_kj_mol": 0.7537916572764516,
+        "max_force_kj_mol_ang": 0.2072162628173828
+      }
+    },
+    {
+      "q": 3.5,
+      "step": {
+        "samples_s": [
+          0.3470114879310131,
+          0.343376561999321,
+          0.3453391359653324
+        ],
+        "median_s": 0.3453391359653324,
+        "min_s": 0.343376561999321,
+        "max_s": 0.3470114879310131
+      },
+      "force": {
+        "samples_s": [
+          0.03356472891755402,
+          0.03335795481689274,
+          0.03334286902099848
+        ],
+        "median_s": 0.03335795481689274,
+        "min_s": 0.03334286902099848,
+        "max_s": 0.03356472891755402
+      },
+      "stages": [
+        {
+          "stage": "force.evaluate",
+          "calls": 3,
+          "total_s": 0.10092044482007623,
+          "self_s": 0.00016055675223469734,
+          "mean_ms": 33.64014827335874
+        },
+        {
+          "stage": "force.evaluate/anchored.force",
+          "calls": 3,
+          "total_s": 0.09721855376847088,
+          "self_s": 0.0023637409321963787,
+          "mean_ms": 32.406184589490294
+        },
+        {
+          "stage": "force.evaluate/anchored.force/autograd.grad",
+          "calls": 3,
+          "total_s": 0.03996367892250419,
+          "self_s": 0.03996367892250419,
+          "mean_ms": 13.321226307501396
+        },
+        {
+          "stage": "force.evaluate/anchored.force/backbone.fragments_batched",
+          "calls": 3,
+          "total_s": 0.038498352747410536,
+          "self_s": 0.03645692579448223,
+          "mean_ms": 12.832784249136845
+        },
+        {
+          "stage": "force.evaluate/anchored.force/backbone.fragments_batched/coulomb.kernel",
+          "calls": 3,
+          "total_s": 0.0020414269529283047,
+          "self_s": 0.0020414269529283047,
+          "mean_ms": 0.6804756509761015
+        },
+        {
+          "stage": "force.evaluate/anchored.force/graph.build",
+          "calls": 3,
+          "total_s": 0.016392781166359782,
+          "self_s": 0.016392781166359782,
+          "mean_ms": 5.464260388786594
+        },
+        {
+          "stage": "force.evaluate/coordinates.unwrap",
+          "calls": 3,
+          "total_s": 0.0001271250657737255,
+          "self_s": 0.0001271250657737255,
+          "mean_ms": 0.04237502192457517
+        },
+        {
+          "stage": "force.evaluate/fires.force",
+          "calls": 3,
+          "total_s": 0.003414209233596921,
+          "self_s": 0.0013777471613138914,
+          "mean_ms": 1.138069744532307
+        },
+        {
+          "stage": "force.evaluate/fires.force/autograd.grad",
+          "calls": 3,
+          "total_s": 0.0020364620722830296,
+          "self_s": 0.0020364620722830296,
+          "mean_ms": 0.6788206907610098
+        }
+      ],
+      "ms_per_step": 34.53391359653324,
+      "ns_per_day": 5.0037769254552975,
+      "instrumentation_delta": {
+        "energy_kj_mol": 0.0,
+        "max_force_kj_mol_ang": 0.3031501770019531
+      }
+    },
+    {
+      "q": 4.0,
+      "step": {
+        "samples_s": [
+          0.3411661898717284,
+          0.34377732081338763,
+          0.34782494395039976
+        ],
+        "median_s": 0.34377732081338763,
+        "min_s": 0.3411661898717284,
+        "max_s": 0.34782494395039976
+      },
+      "force": {
+        "samples_s": [
+          0.033431255957111716,
+          0.033276309026405215,
+          0.03323875507339835
+        ],
+        "median_s": 0.033276309026405215,
+        "min_s": 0.03323875507339835,
+        "max_s": 0.033431255957111716
+      },
+      "stages": [
+        {
+          "stage": "force.evaluate",
+          "calls": 3,
+          "total_s": 0.10040561179630458,
+          "self_s": 0.00015380722470581532,
+          "mean_ms": 33.46853726543486
+        },
+        {
+          "stage": "force.evaluate/anchored.force",
+          "calls": 3,
+          "total_s": 0.09675841080024838,
+          "self_s": 0.002342231571674347,
+          "mean_ms": 32.25280360008279
+        },
+        {
+          "stage": "force.evaluate/anchored.force/autograd.grad",
+          "calls": 3,
+          "total_s": 0.04101715818978846,
+          "self_s": 0.04101715818978846,
+          "mean_ms": 13.67238606326282
+        },
+        {
+          "stage": "force.evaluate/anchored.force/backbone.fragments_batched",
+          "calls": 3,
+          "total_s": 0.03736446099355817,
+          "self_s": 0.03539892309345305,
+          "mean_ms": 12.454820331186056
+        },
+        {
+          "stage": "force.evaluate/anchored.force/backbone.fragments_batched/coulomb.kernel",
+          "calls": 3,
+          "total_s": 0.0019655379001051188,
+          "self_s": 0.0019655379001051188,
+          "mean_ms": 0.6551793000350395
+        },
+        {
+          "stage": "force.evaluate/anchored.force/graph.build",
+          "calls": 3,
+          "total_s": 0.01603456004522741,
+          "self_s": 0.01603456004522741,
+          "mean_ms": 5.344853348409136
+        },
+        {
+          "stage": "force.evaluate/coordinates.unwrap",
+          "calls": 3,
+          "total_s": 0.00011889194138348103,
+          "self_s": 0.00011889194138348103,
+          "mean_ms": 0.03963064712782701
+        },
+        {
+          "stage": "force.evaluate/fires.force",
+          "calls": 3,
+          "total_s": 0.0033745018299669027,
+          "self_s": 0.0013752707745879889,
+          "mean_ms": 1.124833943322301
+        },
+        {
+          "stage": "force.evaluate/fires.force/autograd.grad",
+          "calls": 3,
+          "total_s": 0.001999231055378914,
+          "self_s": 0.001999231055378914,
+          "mean_ms": 0.6664103517929713
+        }
+      ],
+      "ms_per_step": 34.37773208133876,
+      "ns_per_day": 5.026509590311249,
+      "instrumentation_delta": {
+        "energy_kj_mol": 0.3768958291038871,
+        "max_force_kj_mol_ang": 0.2490239143371582
+      }
+    },
+    {
+      "q": 4.5,
+      "step": {
+        "samples_s": [
+          0.27588643901981413,
+          0.27891898481175303,
+          0.27995382412336767
+        ],
+        "median_s": 0.27891898481175303,
+        "min_s": 0.27588643901981413,
+        "max_s": 0.27995382412336767
+      },
+      "force": {
+        "samples_s": [
+          0.03387253498658538,
+          0.033914369996637106,
+          0.034002166939899325
+        ],
+        "median_s": 0.033914369996637106,
+        "min_s": 0.03387253498658538,
+        "max_s": 0.034002166939899325
+      },
+      "stages": [
+        {
+          "stage": "force.evaluate",
+          "calls": 3,
+          "total_s": 0.10213619307614863,
+          "self_s": 0.000150659354403615,
+          "mean_ms": 34.04539769204954
+        },
+        {
+          "stage": "force.evaluate/anchored.force",
+          "calls": 3,
+          "total_s": 0.09694493166171014,
+          "self_s": 0.0022744163870811462,
+          "mean_ms": 32.31497722057005
+        },
+        {
+          "stage": "force.evaluate/anchored.force/autograd.grad",
+          "calls": 3,
+          "total_s": 0.04113578889518976,
+          "self_s": 0.04113578889518976,
+          "mean_ms": 13.711929631729921
+        },
+        {
+          "stage": "force.evaluate/anchored.force/backbone.fragments_batched",
+          "calls": 3,
+          "total_s": 0.03740374115295708,
+          "self_s": 0.03542011044919491,
+          "mean_ms": 12.46791371765236
+        },
+        {
+          "stage": "force.evaluate/anchored.force/backbone.fragments_batched/coulomb.kernel",
+          "calls": 3,
+          "total_s": 0.0019836307037621737,
+          "self_s": 0.0019836307037621737,
+          "mean_ms": 0.6612102345873913
+        },
+        {
+          "stage": "force.evaluate/anchored.force/graph.build",
+          "calls": 3,
+          "total_s": 0.016130985226482153,
+          "self_s": 0.016130985226482153,
+          "mean_ms": 5.376995075494051
+        },
+        {
+          "stage": "force.evaluate/coordinates.unwrap",
+          "calls": 3,
+          "total_s": 0.00012200791388750076,
+          "self_s": 0.00012200791388750076,
+          "mean_ms": 0.04066930462916692
+        },
+        {
+          "stage": "force.evaluate/fires.force",
+          "calls": 3,
+          "total_s": 0.00491859414614737,
+          "self_s": 0.002168698236346245,
+          "mean_ms": 1.6395313820491235
+        },
+        {
+          "stage": "force.evaluate/fires.force/autograd.grad",
+          "calls": 3,
+          "total_s": 0.0027498959098011255,
+          "self_s": 0.0027498959098011255,
+          "mean_ms": 0.9166319699337085
+        }
+      ],
+      "ms_per_step": 27.891898481175303,
+      "ns_per_day": 6.195347373597588,
+      "instrumentation_delta": {
+        "energy_kj_mol": 0.3768958281725645,
+        "max_force_kj_mol_ang": 0.264801025390625
+      }
+    },
+    {
+      "q": 5.0,
+      "step": {
+        "samples_s": [
+          0.2752514120656997,
+          0.2751470529474318,
+          0.2753387279808521
+        ],
+        "median_s": 0.2752514120656997,
+        "min_s": 0.2751470529474318,
+        "max_s": 0.2753387279808521
+      },
+      "force": {
+        "samples_s": [
+          0.03418356389738619,
+          0.03404340101405978,
+          0.0341281711589545
+        ],
+        "median_s": 0.0341281711589545,
+        "min_s": 0.03404340101405978,
+        "max_s": 0.03418356389738619
+      },
+      "stages": [
+        {
+          "stage": "force.evaluate",
+          "calls": 3,
+          "total_s": 0.10242342087440193,
+          "self_s": 0.00015841471031308174,
+          "mean_ms": 34.14114029146731
+        },
+        {
+          "stage": "force.evaluate/anchored.force",
+          "calls": 3,
+          "total_s": 0.09859353513456881,
+          "self_s": 0.0024007370229810476,
+          "mean_ms": 32.86451171152294
+        },
+        {
+          "stage": "force.evaluate/anchored.force/autograd.grad",
+          "calls": 3,
+          "total_s": 0.040995145216584206,
+          "self_s": 0.040995145216584206,
+          "mean_ms": 13.665048405528069
+        },
+        {
+          "stage": "force.evaluate/anchored.force/backbone.fragments_batched",
+          "calls": 3,
+          "total_s": 0.03851575590670109,
+          "self_s": 0.036484434036538005,
+          "mean_ms": 12.838585302233696
+        },
+        {
+          "stage": "force.evaluate/anchored.force/backbone.fragments_batched/coulomb.kernel",
+          "calls": 3,
+          "total_s": 0.002031321870163083,
+          "self_s": 0.002031321870163083,
+          "mean_ms": 0.677107290054361
+        },
+        {
+          "stage": "force.evaluate/anchored.force/graph.build",
+          "calls": 3,
+          "total_s": 0.01668189698830247,
+          "self_s": 0.01668189698830247,
+          "mean_ms": 5.560632329434156
+        },
+        {
+          "stage": "force.evaluate/coordinates.unwrap",
+          "calls": 3,
+          "total_s": 0.0001270428765565157,
+          "self_s": 0.0001270428765565157,
+          "mean_ms": 0.04234762551883856
+        },
+        {
+          "stage": "force.evaluate/fires.force",
+          "calls": 3,
+          "total_s": 0.003544428152963519,
+          "self_s": 0.00141814723610878,
+          "mean_ms": 1.1814760509878397
+        },
+        {
+          "stage": "force.evaluate/fires.force/autograd.grad",
+          "calls": 3,
+          "total_s": 0.002126280916854739,
+          "self_s": 0.002126280916854739,
+          "mean_ms": 0.7087603056182464
+        }
+      ],
+      "ms_per_step": 27.52514120656997,
+      "ns_per_day": 6.277896948944784,
+      "instrumentation_delta": {
+        "energy_kj_mol": 0.3768958291038871,
+        "max_force_kj_mol_ang": 0.3050498962402344
+      }
+    }
+  ],
+  "interpretation": "Uninstrumented step/force timing is the performance baseline. Nested stages synchronize CUDA at every boundary and add overhead. Inclusive stage times overlap; sum self_s only. No free energy or scientific acceptance is measured. Weight files are identified by path/stat, not hash."
+}
