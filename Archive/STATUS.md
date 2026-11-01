@@ -1,4 +1,4 @@
-# Status — 2026-10-15 (rev 10)
+# Status — 2026-10-23 (rev 12; open items updated through 2026-10-23, the rest as of rev 10)
 
 Snapshot of where the project stands. The design document is
 `RESEARCH_PLAN_v3.md` (since 2026-10-10; decisions in its S12). Numbers cite
@@ -36,6 +36,14 @@ D8 Stage A = acetamide, solvent leg (2026-10-15).
 D18 reference state of the decoupled end = bulk MM water: B -> B' leg (inner waters ML -> MM) minus a neat-solvent dG_ref (2026-10-16; dG_ref to confirm).
 Open: D9 drug set · D12 one flagship paper · D13 mark v2
 S0-S12 superseded in the file.
+D19 the decoupled end (user, 2026-10-18; v3 S6.3.4a): **option 3**. ML
+carries only L and truth(L, I); the shell water is TIP3P; SW and dG_ref are
+dropped. A finite-k FIRES residual that depends on the ghost's shape
+remains, to measure. In code (`run_abfe.py --mode mlmm --shell-mm`), exact
+checks and an acetamide smoke pass (v3 S13.53); no free energy yet.
+Existing totals stay as diagnostics.
+**D19 paused for expansion (user, 2026-10-21)**: a candidate to validate; see the D19 review at the
+top of the open items (v3 S13.56-13.59).
 
 ## Current conclusions
 
@@ -110,7 +118,14 @@ What is not known:
        (inner waters ML -> MM at the decoupled end) and subtract a
        neat-solvent dG_ref (same n, FIRES around a dummy atom). Not in
        code yet.
-    2. the all-MM path control with matched ends on acetamide (vs +34.04);
+    2. the all-MM path control with matched ends on acetamide (vs +34.04):
+       done (S13.48). MBAR +33.54 +- 0.10 over 3 seeds, -0.50 from the
+       reference; still drifting up between halves (second halves +33.78),
+       so most likely under-equilibrated W3 refill. Seed 1 extended to
+       2 ns on the 5090: last ns +34.05 +- 0.24, and the 0.5 ns blocks
+       scatter by 0.72, so the -0.5 is sampling. FIRES on MM waters gives
+       +34.87 +- 0.54. **The path reproduces the MM decoupling**; it is not
+       the source of the 85 kJ/mol;
     3. the W2 / W3 window gaps.
 12. **How much D17 reshapes c at lambda = 0+.** Forces are the energy
     gradient, and the 2 fs drift is integration error (S13.43). But the cap
@@ -153,6 +168,130 @@ Head history:
 All of them are in `runs/polar-M/ckpt/`.
 
 ## Open items, in priority order
+
+**Current design (user, 2026-10-23): `DESIGN_2026-10-23_groupwise_dummy.md`** -- groups become dummy one by one (states = groups + 1, no lambda windows / walls / GCMC), MM samples and saves frames, the model evaluates all frames in one batch. ML-driven sampling (`--mode mlmm`) is not used. Earlier note: First step, MM only on
+acetamide (CH3 | C(=O)NH2, 61 states): smoke on 183 (10 samples/state) +34.43 +- 1.62 vs MM +34.04.
+Full run on the 5090 (15:09, `run_5090.sh`) STOPPED by the user at 15:34 after ~2-4 states per job:
+the script saves only neighbour energies, not frames, so the model cannot be applied to them afterwards.
+
+**One-step jump + water term on acetamide, MM only (2026-10-23, v3 S13.64).** Total +33.90 against
+MM MBAR +34.04 kJ/mol (jump BAR +56.85 + wall-growth -22.95 + 0.002), but the jump's forward / reverse
+FEP disagree by 53 kJ/mol. Checks: r_in 0.25 over 3 seeds +35.16 +- 1.14 (1.1 above MM); r_in 0.28
++37.33 (should equal it): within 1-3 kJ/mol of MM, a residual r_in dependence of ~2 kJ/mol unresolved;
+the jump is the weak step. The P(N=0) term needs wall growth; the MC histogram never reaches N = 0.
+
+**Direction (user, 2026-10-23, ~12:30): the model is a decomposition tool, not a sampling engine.**
+Removing every ligand atom's coupling is the binding / solvation free energy, so the total comes from
+the per-atom attribution itself. MM samples (the existing MM ABFE windows, frames saved); the model is
+evaluated on those frames in large batches (per-atom D_iE = dU/dlambda_i), integrated over lambda to
+per-atom dG_i, summing to the total. ML-driven ML/MM ladders (`--mode mlmm`) are not the way forward.
+Open: whether to reweight MM -> ML (the user's call); which IBS runs saved frames.
+
+**HSP90-27 on the POLAR-shell path -- STOPPED 2026-10-23 ~12:30 by the user (direction above).** User: the path is
+POLAR-shell (+33 cause fixed by it); the wall now covers ions; the ladder minimises each replica on a
+fresh start. `experiments/2026-10-23_hsp90_27_polar/run.sh`: segAB q 0-3 and segC q 3-4 (W3),
+20 ps per state, est. ~18:00 / ~14:00 from the first iterations. Shape leg (q 4-5) not run: in the
+ladder smoke q = 5 went NaN after EM (a separate EM of the same state is stable; not explained).
+
+**POLAR-shell candidate and propagation optimizations (2026-10-23, user: implement and speed up).**
+`--polar-shell` implements option 2 as W1 | W2 | cut | W3 | shape, with POLAR water-water retained
+and a fixed-identity energy bridge to one-point FIRES. Its endpoint is a POLAR droplet in MM solvent,
+not bulk-MM water; it is an explicit candidate, not evidence that the +33 gap is repaired.
+Exact decoupled-endpoint shortcuts are implemented, with a `--reference-forces` A/B path.
+Coupled-endpoint and scalar interior propagation plus optional `--batch-fragments` pass FP64
+checks only; FP32 force differences failed the preset threshold, so FP32 coupled/interior states
+retain the reference algorithm and FP32 batching is rejected. Checkpoint model/identity mismatches
+fail before restoring histories.
+Protocol and verification: `IMPLEMENTATION_2026-10-23_POLAR_SHELL.md` and
+`experiments/2026-10-23_polar_shell/RESULT.md`. Production-GPU timing and scientific acceptance remain open.
+CPU validation: 9 regressions, 16 real-POLAR FP64 cases, and three FP32 cut-endpoint cases pass.
+FP32 q=3 force-call latency ratios are 2.20x (POLAR shell) and 17.64x (D19); these are not GPU
+or full-ladder speedups. The FP32 reference-repeat check also exceeded the preset force threshold;
+retain that failure and calibrate the noise before enabling additional FP32 optimizations.
+**5090, FP32, paired reference/fast (2026-10-23, v3 S13.60)**: lambda = 1 and interior states unchanged
+(~90 ms/step); POLAR-shell q >= 3 92 -> 57 ms/step (1.6x); D19 only q = 3 gains (94 -> 32). GPU FP32
+repeat calls on one frame differ by 0.14-0.55 kJ/mol/A in force (ML states), 3-11x the 0.05 threshold:
+that threshold cannot decide FP32 equivalence on the GPU.
+**FP32 gates removed (user, 2026-10-23, v3 S13.61)**: the model is FP32 only; FP64 checks prove the algebra.
+With `--batch-fragments` on the 5090: POLAR-shell lambda=1 106 -> 48, interior 92 -> 65, W3 94 -> 34
+ms/step (shape-leg timings void: q >= 4.5 goes NaN within 5 steps from the leg start frame, any force variant;
+a test set-up error, no EM before MD; with steepest-descent EM they run (shape ~50 ms/step, 34 ms force call);
+the ladder itself has no EM step, so q >= 4.5 needs EM or `--init-from`; RESULT.md "更正", "EM"); D19 lambda=1 107 -> 73, interior 92 -> 66, q=3 94 -> 33. `--batch-fragments` is
+now on by default in `run_abfe.py` / `profile_mlmm.py` (user, 2026-10-23); `--no-batch-fragments` turns it off,
+`--reference-forces` turns off both shortcuts and batching.
+**Concurrency (v3 S13.62)**: N processes on one 5090 saturate at N = 4 (total 1.28-1.44x of N = 1; N = 8 adds
+2-5%; 2.7 GB each). Beyond that: replica batching in one backbone call (not implemented).
+
+**D19 review: conclusions as of 2026-10-21 (v3 S13.56-13.59).** D19 is **paused for expansion**
+and kept as a candidate to validate (user, 2026-10-21). What stands:
+1. **D19 on acetamide, first full path** (S13.56): MBAR +67.05 +- 2.54 kJ/mol against MM +34.04,
+   E3D - MM = +33.0. W1 and W3 match the all-MM control E8; the gap is W2 (+25.9) and the cut (+5.4,
+   not converged: halves +1.4 / +9.4). 20 ps per state, one seed.
+2. **Not POLAR on the same configurations** (S13.57): on GAFF2/TIP3P frames POLAR's ligand-shell
+   coupling differs from MM by -4.0 +- 2.4 kJ/mol. This points to an ensemble effect; it does not
+   exclude other energy terms or establish the source of the free-energy gap.
+3. **D19 samples shells with a large POLAR many-body term** (S13.57-13.59): -71 (production
+   identity) against -5 on MM frames and -16 on the old path's frames; the two-body sum stays near
+   MM. From four shared starts (same identity, seed, velocities; 10 ps) D19 ends with the stronger
+   many-body term every time (mean -24) and the stronger coupling (truth mean -35).
+4. **The old model penalises those shells** (S13.58): on D19's frames U_old - U_D19 is ~+41 kJ/mol
+   above the MM baseline, offsetting ~60% of their many-body advantage. The two water models drive
+   the shell apart within ~0.5 ps; their relative preferences for the two shell ensembles differ
+   by ~150-180 kJ/mol (S13.59), not a separate penalty of that size under each model.
+5. **Reading** (hypothesis, supported, not proven): replacing the shell's POLAR energy by TIP3P
+   changes the relative cost of shell configurations and over-favours some cooperative ones.
+   The old model also has more negative coupling energies (truth ~-166 vs -99 on MM frames).
+   A common contribution to the +33 free-energy difference remains a hypothesis, not a deduction.
+6. **Not settled**: no independent reference says which shell is right; configuration energies,
+   not free energies; 10-20 ps, one seed each. Not to be "fixed" by suppressing the many-body term,
+   the head or the cap (they do not set the lambda = 1 energy).
+**Next**: validate the implemented option-2 candidate and choose an independent physical reference
+before judging shell accuracy. Option 1's reference-leg convergence problem remains.
+
+**Next after the D19 acetamide ladder: speed (user, 2026-10-20; v3 S8 top).** The ML/MM step is
+0.19-0.33 s per replica on a 2080 Ti and on an RTX 3090 alike, 200-300x slower per step than MM
+ABFE; fix the per-step overhead (profile first; batch replicas / backbone calls) before going wide.
+Implementation audit and bounded profiling entry: `PERFORMANCE_PLAN_2026-10-20.md`,
+`profile_mlmm.py`. Per-step Euler Coulomb attribution and all-edge head readouts are additional
+optimization candidates before replica batching. This was the pre-profile audit; equivalent force
+optimizations were subsequently implemented on 2026-10-23. The current session cannot access the
+NVIDIA driver; production-GPU speedups remain unmeasured.
+Baseline profile run 2026-10-20 (v3 S13.55, 2080 Ti): ML states 342-367 ms/step, W3 (ligand
+only) 142-152; backward ~47% and three backbone forwards ~45%; 4-14 thousand CUDA kernels per force
+call with the GPU busy ~10-30% -- launch-bound. Coulomb split ~4%, head < 1%.
+
+**HSP90-27 longer A run (old path, diagnostic only; 2026-10-19; v3 S13.54).** MBAR +168.47 +- 1.79
+at 20 ps per state against +168.06 +- 3.57 at 5 ps: A does not move with sampling. Its TI is broken
+(dG_W2 = -2.6e7 kJ/mol) because Na+/Cl- enter the ghost ligand at lambda = 0 (the wall covers waters
+only), so the unscaled ligand-ion LJ in dU/dlambda diverges. Energies stay finite; only TI and the
+per-atom split are affected. Matters only when the salted IBS legs are run on D19 for attribution.
+Acetamide has no ions.
+
+**Correction (2026-10-18; v3 S13.52):** dG_ref differs by +89.6 kJ/mol between two alike IBS boxes,
+and its ML-water end drifts within each run. So SW / dG_ref are unconverged, and the +27 offset below is
+not established; with HSP90-27's own-box ref its E3D - MM goes from +46.7 to -42.9.
+
+**First cross-molecule result (2026-10-18; v3 S13.51).** E3D vs IBS MM on 5 neutral legs:
+E3D - MM = +13 / +47 / +17 / +19 / +37 kJ/mol (mean +26.8, SD 14.5), all positive. The causes are
+not separated (5 ps per state; the ML-vs-MM Hamiltonian and the seam; the cut ~+30; one dG_ref for
+six boxes). HSP90-19's tail and acetamide's dG_ref are still to come.
+
+**Running at hand-off (2026-10-17 15:25; v3 S13.50).** ML/MM horizontal test on the revised path
+(SW before an all-MM W3). Queues: `experiments/2026-10-17_set_run/run_set2_183.log` (workstation B:
+full HSP90-27, CypD-8, then tails 17, 19) and `run_set2_181.log` (workstation C: after acetamide's
+first pass, full CypD-4, then tails PWWP1-8, acetamide); PIDs in that directory's `pids.txt`.
+Each job resumes if rerun. **Next**: the dG_ref leg (`run_abfe.py --mode mlmm --ref --qs 3,...,4
+--init-from <v2_tail or v2_full run> --init-q 5`) once a tail has a refilled q = 5 state; until it
+is subtracted every total carries the ~4e6 kJ/mol SW constant and must not be compared with MM.
+Then: one table of all molecules against their IBS MM values.
+
+**Reframed 2026-10-17 (user; v3 S8 top, S13.49):** the method is general.
+It is judged across neutral molecules (6 IBS legs + acetamide + Atenolol)
+against their MM values, breadth first. The IBS MM values are the
+reference; the earlier 85 kJ/mol gap was E3D's incomplete total, not the
+reference. Next: frames and clusters for all molecules -> one pooled head
+(some held out) -> ML/MM on all of them, with the D18 legs and the packed
+windows.
 
 Route (user, 2026-10-15; v3 S8 top): (1) close the lambda = 0+ dynamics
 question -- **done 2026-10-15, S13.43**, (2) `--mode mlmm` + RTX 5090
@@ -325,6 +464,19 @@ Production GPU is an RTX 5090. The 2080 Ti workstations are for smoke
 runs only.
 
 Traps worth not rediscovering:
+- **0 x inf in OpenMM custom expressions.** A term scaled to zero by a
+  global (lam_lj = 0) still evaluates (s/r)^12. In mixed precision that
+  overflows when atoms overlap, which they do at a decoupled end, and gives
+  NaN. Floor r or use a softcore (S13.48).
+- **Several ladder processes on one GPU** fail at the first Context with
+  "No compatible CUDA device". This happened on the 2080 Ti and on the
+  5090, and is not memory; the cause is not known (S13.48). Run one
+  process per GPU.
+- **`set -u` in launch scripts** breaks `conda activate`, whose activate.d
+  scripts read unset variables. Wrap the activation in `set +u` ... `set -u`.
+- **MBAR's error on HREMD samples understates the scatter.** In S13.48
+  the 0.5 ns blocks scatter twice as much as the MBAR error. Judge
+  convergence by blocks and by independent repeats.
 - **Self-pairs.** Never exclude them by distance: `torch.cdist` switches
   algorithm above 25 rows and leaves the diagonal at ~1e-4, which silently
   NaNs everything.
