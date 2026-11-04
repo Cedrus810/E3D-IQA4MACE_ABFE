@@ -1,0 +1,51 @@
+{
+  "scope": "Fixed-axis toy water geometry probe only; no OpenMM, model or energy call. Full ligand-axis, actual constraints, PBC, sampling and rollback remain untested.",
+  "angle_rad": 0.31,
+  "rows": [
+    {
+      "weight": 1.0,
+      "inverse_error_nm": 2.7755575615628914e-17,
+      "mass_gram_max_difference": 2.0816681711721685e-17,
+      "finite_difference_steps_nm": [
+        1e-05,
+        3e-06,
+        1e-06
+      ],
+      "cartesian_determinants": [
+        0.99999999999949,
+        1.0000000000039149,
+        1.0000000000481384
+      ]
+    },
+    {
+      "weight": 0.6238425925925923,
+      "inverse_error_nm": 8.326672684688674e-17,
+      "mass_gram_max_difference": 1.3877787807814457e-16,
+      "finite_difference_steps_nm": [
+        1e-05,
+        3e-06,
+        1e-06
+      ],
+      "cartesian_determinants": [
+        1.000000000003907,
+        0.9999999999591269,
+        0.9999999999837803
+      ]
+    },
+    {
+      "weight": 0.016601562500000288,
+      "inverse_error_nm": 1.1102230246251565e-16,
+      "mass_gram_max_difference": 1.457167719820518e-16,
+      "finite_difference_steps_nm": [
+        1e-05,
+        3e-06,
+        1e-06
+      ],
+      "cartesian_determinants": [
+        0.9999999999795648,
+        0.9999999999992445,
+        1.000000000002272
+      ]
+    }
+  ]
+}

@@ -44,19 +44,20 @@ EV = 96.485332
 
 # ---------------------------------------------------------------- model energy (local_E v1)
 
-def couplings_dt(model, clusters, dummy, dtype, split=False):
+def couplings_dt(model, clusters, dummy, dtype, split=False, device="cuda"):
     """step_eval.couplings with an explicit dtype; float32 reproduces it.
-    split=True also returns the learned-channel and explicit-Coulomb parts (same forward), eV."""
+    split=True also returns the learned-channel and explicit-Coulomb parts (same forward), eV.
+    device defaults to the sampling device; CPU is available for fixed-frame audits."""
     import torch
     from decomp.data import mace_batch
     from decomp.polar_es import coulomb_cross
     n_lig = len(dummy)
     data = mace_batch([c[0] for c in clusters], [c[1] for c in clusters], model.backbone,
-                      charges=[0] * len(clusters), frag_ids=[c[2] for c in clusters], device="cuda", dtype=dtype)
+                      charges=[0] * len(clusters), frag_ids=[c[2] for c in clusters], device=device, dtype=dtype)
     frag = data["frag_id"]
     in_L = frag == 0
     dm = torch.as_tensor(np.concatenate([np.r_[dummy, np.zeros(len(c[1]) - n_lig, bool)] for c in clusters]),
-                         device="cuda")
+                         device=device)
     src, dst = data["edge_index"]
     keep = ~((in_L[src] != in_L[dst]) & (dm[src] | dm[dst]))
     sub = {**data, "edge_index": data["edge_index"][:, keep], "shifts": data["shifts"][keep],
@@ -69,10 +70,10 @@ def couplings_dt(model, clusters, dummy, dtype, split=False):
     s, d = sub["edge_index"]
     cr = in_L[s] != in_L[d]
     lig_end = torch.where(in_L[s], s, d)
-    learned = torch.zeros(len(frag), dtype=D.dtype, device="cuda").index_add(0, lig_end[cr], 0.5 * D[cr])
+    learned = torch.zeros(len(frag), dtype=D.dtype, device=device).index_add(0, lig_end[cr], 0.5 * D[cr])
     coul = rec["per_atom"].to(D.dtype)
     c = learned + coul
-    rows = data["ptr"][:-1, None] + torch.arange(n_lig, device="cuda")[None, :]
+    rows = data["ptr"][:-1, None] + torch.arange(n_lig, device=device)[None, :]
     parts = [t[rows].detach().cpu().numpy().astype(np.float64) for t in ((c, learned, coul) if split else (c,))]
     for p in parts:
         p[:, dummy] = np.nan
@@ -82,12 +83,12 @@ def couplings_dt(model, clusters, dummy, dtype, split=False):
 class ModelEnergy:
     """dU_j(x) in kJ/mol for one full-box frame (nm), local_E v1."""
 
-    def __init__(self, leg, j, dtype_name="float64", ckpt=None, backbone=None):
+    def __init__(self, leg, j, dtype_name="float64", ckpt=None, backbone=None, device="cuda"):
         import torch
         from model_eval import load_model
-        self.leg, self.dm = leg, leg.dummy(j)
+        self.leg, self.dm, self.device = leg, leg.dummy(j), device
         self.dtype = getattr(torch, dtype_name)
-        self.model = load_model(ckpt=ckpt, backbone=backbone).to(self.dtype)
+        self.model = load_model(ckpt=ckpt, backbone=backbone, device=device).to(self.dtype)
         self.calls, self.seconds = 0, 0.0
 
     def __call__(self, xyz_nm):
@@ -98,7 +99,7 @@ class ModelEnergy:
         if self.dm.all():
             ml = 0.0
         else:                       # dummy columns are NaN by construction; every active atom must be finite
-            tot, lrn, cou = couplings_dt(self.model, [(p, n, f)], self.dm, self.dtype, split=True)
+            tot, lrn, cou = couplings_dt(self.model, [(p, n, f)], self.dm, self.dtype, split=True, device=self.device)
             act = tot[0, ~self.dm]
             if not np.isfinite(act).all():
                 raise FloatingPointError(f"non-finite C^ML on active ligand atoms {np.where(~np.isfinite(act))[0]}")
@@ -128,9 +129,9 @@ def model_identity(ckpt=None, backbone=None):
 
 # ---------------------------------------------------------------- MM proposal
 
-def proposal_integrator(L, dt_fs):
+def proposal_integrator(L, dt_fs, temperature_K=gm.T):
     ig = openmm.CustomIntegrator(dt_fs * 1e-3)
-    for g, v in (("kT", KT), ("draw", 1.0), ("ke", 0.0), ("Eold", 0.0), ("Enew", 0.0), ("Vold", 0.0), ("Vnew", 0.0)):
+    for g, v in (("kT", gm.thermal_energy(temperature_K)), ("draw", 1.0), ("ke", 0.0), ("Eold", 0.0), ("Enew", 0.0), ("Vold", 0.0), ("Vnew", 0.0)):
         ig.addGlobalVariable(g, v)
     ig.addPerDofVariable("x1", 0)
     ig.addComputePerDof("v", "draw*sqrt(kT/m)*gaussian + (1-draw)*v")
@@ -163,9 +164,9 @@ def mm_system(name, extra=None):
     return system, groups, box
 
 
-def make_context(system, box, integrator):
-    plat = openmm.Platform.getPlatformByName("CUDA")
-    c = openmm.Context(system, integrator, plat, {"Precision": "mixed"})
+def make_context(system, box, integrator, platform="CUDA"):
+    plat = openmm.Platform.getPlatformByName(platform)
+    c = openmm.Context(system, integrator, plat, {"Precision": "mixed"} if platform == "CUDA" else {})
     c.setPeriodicBoxVectors(*[openmm.Vec3(*row) for row in np.asarray(box)])
     return c
 
@@ -180,6 +181,7 @@ def positions(c):
 
 def hmc(c, ig, x0, eta, cycles, energy, rng, record=None, log_every=0, capture=None, initial=None):
     """Metropolis on U = V + eta * energy(x). energy(x) is evaluated once per proposal and once at x0."""
+    rt = ig.getGlobalVariableByName("kT")
     if initial is None:
         c.setPositions(x0)
         c.applyConstraints(TOL)
@@ -208,7 +210,7 @@ def hmc(c, ig, x0, eta, cycles, energy, rng, record=None, log_every=0, capture=N
         proposed_details = capture() if capture is not None else None
         if not np.isfinite(dH) or not np.isfinite(en):
             raise FloatingPointError("non-finite proposal energy / integration work")
-        logp = -(dH + eta * (en - e)) / KT
+        logp = -(dH + eta * (en - e)) / rt
         acc = np.log(rng.random()) < logp
         prop = en - e
         Vn = ig.getGlobalVariableByName("Vnew")
@@ -240,6 +242,30 @@ def hmc(c, ig, x0, eta, cycles, energy, rng, record=None, log_every=0, capture=N
         out["prop_details"] = {k: np.stack([r[k] for r in prop_rows]) for k in details} if prop_rows else {}
     out["final_state"] = {"x": x.copy(), "e": e, "details": details}
     return out
+
+
+def mm_updates(c, ig, x, m, rng):
+    """m MM-HMC substeps on V alone (the eta = 0 target; no model query): fresh momenta each, Metropolis on its own
+    dH, rejection restores the exact cached x before the next substep (ETA0_MM_UPDATES_DECISION_2026-11-01.md).
+    Each substep keeps exp(-V/kT); so does their composition. Returns (x, V, dH[m], acc[m])."""
+    rt = ig.getGlobalVariableByName("kT")
+    dHs, accs = np.full(m, np.nan), np.zeros(m, bool)
+    V = None
+    for t in range(m):
+        ig.setGlobalVariableByName("draw", 1.0)
+        ig.step(1)
+        dH = ig.getGlobalVariableByName("Enew") - ig.getGlobalVariableByName("Eold")
+        if V is None:
+            V = ig.getGlobalVariableByName("Vold")
+        if not np.isfinite(dH):
+            raise FloatingPointError("non-finite MM integration work")
+        dHs[t] = dH
+        accs[t] = np.log(rng.random()) < -dH / rt
+        if accs[t]:
+            x, V = positions(c), ig.getGlobalVariableByName("Vnew")
+        else:
+            c.setPositions(x)
+    return x, V, dHs, accs
 
 
 def stat_ineff(x):
@@ -283,9 +309,10 @@ def repeat(a):
 # ---------------------------------------------------------------- step 2a
 
 def reverse(a):
+    KT = gm.thermal_energy(gm.temperature(a.system))
     system, groups, box = mm_system(a.system)
     K = len(groups)
-    ig = proposal_integrator(a.L, a.dt_fs)
+    ig = proposal_integrator(a.L, a.dt_fs, gm.temperature(a.system))
     c = make_context(system, box, ig)
     gm.set_state(c, a.state, K)
     rng = np.random.default_rng(1)
@@ -320,6 +347,8 @@ def reverse(a):
 def analytic(a):
     """Proposal on V, target V + f with f = k (d - d0)^2 on a ligand 1-3 distance (fast CV).
     Reference: Langevin on V + f. Also eta = 0 vs Langevin on V (no f)."""
+    T = gm.temperature(a.system)
+    KT = gm.thermal_energy(T)
     leg = local_E.Leg(a.system)
     _, system0, groups, _, box = gm.build(a.system)
     K = len(groups)
@@ -350,12 +379,12 @@ def analytic(a):
     bond = openmm.CustomBondForce(f"{kf}*(r-{d0})^2")
     bond.addBond(i1, i2, [])
     sysf, _, _ = mm_system(a.system, extra=bond)
-    lg = openmm.LangevinMiddleIntegrator(gm.T * unit.kelvin, 1 / unit.picosecond, 0.002 * unit.picosecond)
+    lg = openmm.LangevinMiddleIntegrator(T * unit.kelvin, 1 / unit.picosecond, 0.002 * unit.picosecond)
     lg.setRandomNumberSeed(11)
     c = make_context(sysf, box, lg)
     gm.set_state(c, a.state, K)
     c.setPositions(start_positions(a.system, 1, a.state))
-    c.setVelocitiesToTemperature(gm.T * unit.kelvin, 11)
+    c.setVelocitiesToTemperature(T * unit.kelvin, 11)
     lg.step(5000)
     dl = []
     for _ in range(a.lang_samples):
@@ -365,7 +394,7 @@ def analytic(a):
     del c
     # HMC: proposal V only
     system, _, _ = mm_system(a.system)
-    ig = proposal_integrator(a.L, a.dt_fs)
+    ig = proposal_integrator(a.L, a.dt_fs, T)
     c = make_context(system, box, ig)
     gm.set_state(c, a.state, K)
     rng = np.random.default_rng(7)
@@ -394,7 +423,7 @@ def chain(a):
     leg = local_E.Leg(a.system)
     system, groups, box = mm_system(a.system)
     K = len(groups)
-    ig = proposal_integrator(a.L, a.dt_fs)
+    ig = proposal_integrator(a.L, a.dt_fs, leg.temperature_K)
     seed = 1000 * a.start + int(round(a.eta * 1000))
     ig.setRandomNumberSeed(seed + 1)
     c = make_context(system, box, ig)
@@ -405,7 +434,7 @@ def chain(a):
     out.parent.mkdir(parents=True, exist_ok=True)
     ident = model_identity(ckpt=a.head, backbone=a.backbone)
     want = {"system": a.system, "state": a.state, "eta": a.eta, "start_rep": a.start, "L": a.L, "dt_fs": a.dt_fs,
-            "dtype": a.dtype, "T_K": gm.T, "E_construction": "local_E v1", **ident,
+            "dtype": a.dtype, "T_K": leg.temperature_K, "E_construction": "local_E v1", **ident,
             "leg": "solvent", "n_water": 50, "n_particles": system.getNumParticles(),
             "ligand_system_indices": list(map(int, leg.lig)), "groups": [list(map(int, g)) for g in leg.groups],
             "dummy_mask": leg.dummy(a.state).tolist(), "box_nm": np.asarray(box, float).tolist(),
@@ -453,9 +482,14 @@ def analyze(a):
 def analyze_target(a, files):
     from pymbar import other_estimators
     rows = {}
+    KT = None
     for f in files:
         z = np.load(f)
         m = json.loads(str(z["meta"]))
+        rt = gm.thermal_energy(m["T_K"])
+        if KT is not None and rt != KT:
+            raise ValueError("cannot combine chains at different temperatures")
+        KT = rt
         n0 = int(len(z["dU"]) * a.discard)
         dU, acc, X = z["dU"][n0:], z["acc"][n0:], z["lig_xyz"][n0:].astype(np.float64)
         disp = np.sqrt(((X[1:] - X[:-1]) ** 2).sum(-1).mean(-1))                 # ligand RMS move per call, nm

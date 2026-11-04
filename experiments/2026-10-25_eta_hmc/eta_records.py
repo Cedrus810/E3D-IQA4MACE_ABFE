@@ -124,6 +124,9 @@ def run_recorded(c, ig, energy, rng, x0, eta, cycles, out, contract, kernel,
     """
     if cycles < 1 or checkpoint_every < 1 or coords_every < 1:
         raise ValueError("cycle / checkpoint / coordinate counts must be positive")
+    rt = 0.0083144626 * float(contract["T_K"])
+    if not np.isfinite(rt) or rt <= 0 or not np.isclose(ig.getGlobalVariableByName("kT"), rt, rtol=0, atol=1e-12):
+        raise ValueError("integrator temperature differs from the recorded target")
     out = Path(out)
     progress = out.with_name(out.stem + ".progress.npz")
     want = {**contract, "storage_schema": SCHEMA, "cycles": int(cycles),

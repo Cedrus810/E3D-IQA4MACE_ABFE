@@ -63,3 +63,4 @@ experiments/**/out/
 # Bulky run traces stay local (regenerable; >5 MB JSON dumps)
 experiments/2026-10-20_performance/baseline_01/trace_*.json
 experiments/2026-10-16_mm_path_control/nofires_seed*/records.json
+pids*.txt

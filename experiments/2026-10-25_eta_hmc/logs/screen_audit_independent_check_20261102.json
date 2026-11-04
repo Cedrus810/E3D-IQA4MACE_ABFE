@@ -1,0 +1,36 @@
+{
+  "scope": "Independent saved-data check; no model query, MM energy evaluation or MD.",
+  "source": "logs/screen_audit_20261102.json",
+  "decomposition_source": "logs/screen_audit_20261102_decomp.json",
+  "counts": {
+    "model_queries_recorded": 269,
+    "audit_MM_full": 408,
+    "decomposition_MM_full": 816,
+    "decomposition_additional_force_group_reads": 816
+  },
+  "historical_V_pairs": {
+    "n": 400,
+    "sum_p_DA": 85.61147731455782,
+    "sum_p_full": 111.76800559304081,
+    "expected_DA_queries": 140.81547442016097,
+    "DA_RMSD2_per_query_A2": 0.0019773664867195856,
+    "full_RMSD2_per_query_A2": 0.001128922555903955,
+    "max_deltaV_difference_from_report_kJ_mol": 0.05347467119281646
+  },
+  "large_rejected_by_torsion": {
+    "T1": {
+      "n": 100,
+      "median_deltaE": 64.57883888658304,
+      "sum_p_DA": 0.17903306667382243,
+      "sum_p_full": 0.36573722255632296
+    },
+    "T5": {
+      "n": 72,
+      "median_deltaE": 9.873669661243198,
+      "sum_p_DA": 2.4120803327903166,
+      "sum_p_full": 5.254265387045927
+    }
+  },
+  "decomposition_closure_max_kJ_mol": 0.0,
+  "interpretation": "Historical V-only recalculation preserves screening decision. Median of paired total changes must be computed per candidate; sum of separate medians is not its median."
+}

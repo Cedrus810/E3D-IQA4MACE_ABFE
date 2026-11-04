@@ -110,6 +110,7 @@ class TestRecordedChain(unittest.TestCase):
 
         me = object.__new__(eh.ModelEnergy)
         me.leg, me.dm, me.model, me.dtype = Leg(), np.array([True, False]), None, None
+        me.device = "cpu"
         me.calls, me.seconds = 0, 0.0
         split = (np.array([[np.nan, 0.2]]), np.array([[np.nan, 0.15]]), np.array([[np.nan, 0.05]]))
         with patch.object(eh, "couplings_dt", return_value=split):

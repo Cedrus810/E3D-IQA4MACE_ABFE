@@ -1,0 +1,72 @@
+{
+  "scope": "Independent saved-data and deterministic historical-ligand reconstruction only; no model, MM-energy or MD call.",
+  "source": "logs/collective_mm_20261104.json",
+  "complete_pairs": 400,
+  "final_batch_MM_evals": 1616,
+  "total_execution_MM_evals": "unknown: aborted first attempt not included in saved successful batch",
+  "model_queries": 0,
+  "md_steps": 0,
+  "sum_alpha_R": 140.81964071666448,
+  "sum_alpha_C": 15.010625053659712,
+  "large_candidates": 202,
+  "large_alpha_above_0p1_R": 49,
+  "large_alpha_above_0p1_C": 0,
+  "moved_still_OO_below_0p25_nm_candidates": 316,
+  "short_contact_scope": "Minimum over w>0 versus w=0 water oxygen pairs in the candidate; neither all water pairs nor source/candidate matched contact identities.",
+  "max_closure_error_kJ_mol": 7.275957614183426e-12,
+  "moved_water_count_range": [
+    96,
+    195
+  ],
+  "frames": [
+    {
+      "frame": 0,
+      "final_reconstruction_error_nm": 0.0,
+      "sum_alpha_R": 20.650417688783627,
+      "sum_alpha_C": 1.8596125424633605
+    },
+    {
+      "frame": 1,
+      "final_reconstruction_error_nm": 0.0,
+      "sum_alpha_R": 25.341574406023103,
+      "sum_alpha_C": 1.0001323997650204
+    },
+    {
+      "frame": 2,
+      "final_reconstruction_error_nm": 0.0,
+      "sum_alpha_R": 13.469739532483757,
+      "sum_alpha_C": 2.004870446273844
+    },
+    {
+      "frame": 3,
+      "final_reconstruction_error_nm": 0.0,
+      "sum_alpha_R": 14.674271817060038,
+      "sum_alpha_C": 1.7752332745703014
+    },
+    {
+      "frame": 4,
+      "final_reconstruction_error_nm": 0.0,
+      "sum_alpha_R": 16.180781306126924,
+      "sum_alpha_C": 0.4115956448829545
+    },
+    {
+      "frame": 5,
+      "final_reconstruction_error_nm": 0.0,
+      "sum_alpha_R": 20.96948029412895,
+      "sum_alpha_C": 4.116284275629487
+    },
+    {
+      "frame": 6,
+      "final_reconstruction_error_nm": 0.0,
+      "sum_alpha_R": 16.040492878186956,
+      "sum_alpha_C": 2.3378118120019105
+    },
+    {
+      "frame": 7,
+      "final_reconstruction_error_nm": 0.0,
+      "sum_alpha_R": 13.492882793871196,
+      "sum_alpha_C": 1.505084658072835
+    }
+  ],
+  "verdict": "STOP h=ell=0.30 nm; no model-query budget."
+}

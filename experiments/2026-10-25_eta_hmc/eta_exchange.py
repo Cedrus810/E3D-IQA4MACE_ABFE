@@ -9,6 +9,9 @@ fixed (matched control: same labels, kernel and model-call budget).
 The ladder is committed as one transaction (all Context checkpoints, local and exchange RNGs, permutation,
 caches); a resume replays an uninterrupted run. No hash; no splicing of independent chains.
 
+--eta0-mm-updates m (> 1): the walker holding eta=0 at the start of a sweep instead does m MM-only HMC substeps and
+one model query at their end (eta0_mm_kernel; ETA0_MM_UPDATES_DECISION_2026-11-01.md); other labels unchanged.
+
 Run: python eta_exchange.py ladder SYSTEM --etas 0,0.25,0.5,1 --start REP --sweeps N --tag T [--head H]
      ... --sweeps 1000 --tag T2 --extend-from T     (continue a completed T ladder; T is not modified)
 """
@@ -69,8 +72,26 @@ def validate_ladder(z):
     K, na, rt = len(etas), len(m["ligand_system_indices"]), float(m["RT"])
     if n < 1 or n > int(m["sweeps"]) or bool(m["complete"]) != (n == int(m["sweeps"])):
         raise ValueError("invalid completion count / flag")
+    m_up, eta0 = int(m.get("eta0_mm_updates", 1)), None
+    if m_up > 1:                                       # eta=0 rows of the multi-update kernel (ETA0_SEMANTICS)
+        if etas[0] != 0.0 or np.asarray(z["walker_eta_local"]).shape != (n, K):
+            raise ValueError("eta=0 MM updates without an eta=0 label")
+        eta0 = np.asarray(z["walker_eta_local"]) == 0.0
+        sub_dH, sub_acc = np.asarray(z["mm_sub_dH"]), np.asarray(z["mm_sub_acc"])
+        if sub_dH.shape != (n, K, m_up) or sub_acc.shape != (n, K, m_up) or sub_acc.dtype != bool:
+            raise ValueError("invalid eta=0 substep records")
+        if not np.isfinite(sub_dH[eta0]).all() or not np.isnan(sub_dH[~eta0]).all() or sub_acc[~eta0].any():
+            raise ValueError("eta=0 substep records on the wrong walkers")
+        if not np.array_equal(np.asarray(z["acc"], bool)[eta0], sub_acc[eta0].any(-1)):
+            raise ValueError("eta=0 state change disagrees with its substeps")
     for k in PER_WALKER:
-        if np.asarray(z[k]).shape != (n, K) or not np.isfinite(z[k]).all():
+        v = np.asarray(z[k])
+        if v.shape != (n, K):
+            raise ValueError(f"invalid per-walker record {k}")
+        if k == "dH" and eta0 is not None:
+            if not np.isfinite(v[~eta0]).all() or not np.isnan(v[eta0]).all():
+                raise ValueError("invalid per-walker record dH")
+        elif not np.isfinite(v).all():
             raise ValueError(f"invalid per-walker record {k}")
     atom, ml = np.asarray(z["dU_atom"]), np.asarray(z["C_ML"])
     for p in ("", "prop_"):
@@ -157,21 +178,32 @@ def same_contract_value(key, a, b):
 
 
 def run_ladder(ctxs, igs, energy, rngs_local, rng_x, x0s, etas, sweeps, out, contract, kernel, rt,
-               exchange=True, checkpoint_every=50, coords_every=10, extend_from=None, device=None):
+               exchange=True, checkpoint_every=50, coords_every=10, extend_from=None, device=None, eta0_mm_updates=1):
     """Run / continue a committed ladder. Model calls: one per walker at the start and one per local proposal;
     exchanges add none. A crash loses at most one uncommitted chunk, replayed from the last commit.
     extend_from: a completed ladder with the same contract and fewer sweeps; its final committed state is continued
-    exactly (Context checkpoints, RNGs, permutation, caches) into the new file `out`; the source is left untouched."""
+    exactly (Context checkpoints, RNGs, permutation, caches) into the new file `out`; the source is left untouched.
+    eta0_mm_updates > 1: `kernel` must be eta0_mm_kernel with the same m; the count and record semantics enter the
+    contract (m = 1 leaves the contract and records exactly as before)."""
     K = len(etas)
     if not (len(ctxs) == len(igs) == len(rngs_local) == len(x0s) == K) or K < 2:
         raise ValueError("one Context / integrator / RNG / start per label")
-    if sweeps < 1 or checkpoint_every < 1 or coords_every < 1:
-        raise ValueError("sweep / checkpoint / coordinate counts must be positive")
+    expected_rt = 0.0083144626 * float(contract["T_K"])
+    if not np.isfinite(rt) or rt <= 0 or not np.isclose(rt, expected_rt, rtol=0, atol=1e-12):
+        raise ValueError("exchange temperature differs from the recorded target")
+    if any(not np.isclose(ig.getGlobalVariableByName("kT"), rt, rtol=0, atol=1e-12) for ig in igs):
+        raise ValueError("integrator temperature differs from the exchange target")
+    if sweeps < 1 or checkpoint_every < 1 or coords_every < 1 or eta0_mm_updates < 1:
+        raise ValueError("sweep / checkpoint / coordinate / update counts must be positive")
+    if eta0_mm_updates > 1 and float(etas[0]) != 0.0:
+        raise ValueError("eta=0 MM updates need an eta=0 label")
     out = pathlib.Path(out)
     progress = out.with_name(out.stem + ".progress.npz")
     want = {**contract, "storage_schema": SCHEMA, "etas": list(map(float, etas)), "RT": float(rt),
             "exchange": bool(exchange), "sweeps": int(sweeps), "initial_perm": list(range(K)),
             "checkpoint_every": int(checkpoint_every), "coords_every": int(coords_every)}
+    if eta0_mm_updates > 1:
+        want["eta0_mm_updates"], want["eta0_semantics"] = int(eta0_mm_updates), ETA0_SEMANTICS
     lig = np.asarray(want["ligand_system_indices"], int)
     want["checkpoint_device"], want["continuations"] = device, []
     states, perm, done, arrays, prior_seconds = [None] * K, np.arange(K), 0, {}, 0.0
@@ -260,6 +292,10 @@ def run_ladder(ctxs, igs, energy, rngs_local, rng_x, x0s, etas, sweeps, out, con
         for k in DETAILS:
             new[k] = np.array([[o["details"][k][0] for o in r] for r in wrows])
             new["prop_" + k] = np.array([[o["prop_details"][k][0] for o in r] for r in wrows])
+        if eta0_mm_updates > 1:
+            m_up = eta0_mm_updates
+            new["mm_sub_dH"] = np.array([[o.get("mm_sub_dH", np.full(m_up, np.nan)) for o in r] for r in wrows])
+            new["mm_sub_acc"] = np.array([[o.get("mm_sub_acc", np.zeros(m_up, bool)) for o in r] for r in wrows])
         rec = np.array([[o["rec"][0] for o in r] for r in wrows])
         prec = np.array([[o["prop_rec"][0] for o in r] for r in wrows])
         new.update({"sweep": sw, "lig_xyz": rec[:, :, lig], "prop_lig_xyz": prec[:, :, lig],
@@ -317,6 +353,22 @@ def check_panel_contract(panel_contract, current):
         raise ValueError("initialization panel target differs: " + ", ".join(different))
 
 
+def initial_state(c, x0, energy, info=None):
+    """eta_hmc.hmc's setPositions / applyConstraints / energy sequence; with a panel, recheck the selected state."""
+    import eta_hmc as eh
+    c.setPositions(x0)
+    c.applyConstraints(eh.TOL)
+    x = eh.positions(c)
+    value = energy(x)
+    details = {k: np.asarray(energy.last_components[k]).copy() for k in DETAILS}
+    if info is not None:
+        from deep_shallow_panel import compare_frame
+        result = compare_frame(value, details, info["expected_dU"], info["expected_components"])
+        if not result["cache_reproduced"]:
+            raise ValueError("panel initial state fails current energy / atoms / Omega recheck: " + json.dumps(result))
+    return {"x": x, "e": float(value), "details": details}
+
+
 def panel_checked_kernel(info):
     """Use the ordinary initial query to recheck the selected panel state before any proposal.
 
@@ -326,18 +378,45 @@ def panel_checked_kernel(info):
     """
     def kernel(c, ig, x0, eta, cycles, energy, rng, **kwargs):
         import eta_hmc as eh
-        from deep_shallow_panel import compare_frame
         if kwargs.get("initial") is None:
-            c.setPositions(x0)
-            c.applyConstraints(eh.TOL)
-            x = eh.positions(c)
-            value = energy(x)
-            details = {k: np.asarray(energy.last_components[k]).copy() for k in DETAILS}
-            result = compare_frame(value, details, info["expected_dU"], info["expected_components"])
-            if not result["cache_reproduced"]:
-                raise ValueError("panel initial state fails current energy / atoms / Omega recheck: " + json.dumps(result))
-            kwargs["initial"] = {"x": x, "e": float(value), "details": details}
+            kwargs["initial"] = initial_state(c, x0, energy, info)
         return eh.hmc(c, ig, x0, eta, cycles, energy, rng, **kwargs)
+    return kernel
+
+
+ETA0_SEMANTICS = ("eta=0 label (held at the start of the sweep): m MM-HMC substeps (L, dt as above, fresh momenta, "
+                  "Metropolis on each substep's own dH, rejection restores the substep's start), then one model query "
+                  "at the final state. Record: acc = at least one substep accepted (state changed), dH = NaN (no single "
+                  "Metropolis work), dE = final - initial cached dU, V / prop_V / prop_* = final state; substeps in "
+                  "mm_sub_dH / mm_sub_acc. Other labels: one unchanged HMC proposal.")
+
+
+def eta0_mm_kernel(base, m, info=None):
+    """The eta = 0 label does m MM-only substeps (eta_hmc.mm_updates) and one final model query
+    (ETA0_MM_UPDATES_DECISION_2026-11-01.md); other labels, and m = 1, run `base` unchanged."""
+    def kernel(c, ig, x0, eta, cycles, energy, rng, record=None, capture=None, initial=None, **kw):
+        import eta_hmc as eh
+        if m == 1 or eta != 0.0:
+            return base(c, ig, x0, eta, cycles, energy, rng, record=record, capture=capture, initial=initial, **kw)
+        if cycles != 1 or record is None or capture is None:
+            raise ValueError("the eta=0 multi-update kernel runs one recorded sweep at a time")
+        if initial is None:
+            initial = initial_state(c, x0, energy, info)
+        elif np.abs(eh.positions(c) - initial["x"]).max() > eh.POS_TOL:
+            raise ValueError("checkpoint positions differ from the saved accepted state")
+        e0 = float(initial["e"])
+        x, V, dH, acc = eh.mm_updates(c, ig, np.array(initial["x"], np.float64), m, rng)
+        e = energy(x)
+        details = capture()
+        if not np.isfinite(e):
+            raise FloatingPointError("non-finite model energy at the final eta=0 state")
+        one = {k: np.asarray(v)[None] for k, v in details.items()}
+        return {"acc": np.array([acc.any()]), "dH": np.array([np.nan]), "dE": np.array([e - e0]),
+                "V": np.array([V]), "e": np.array([e]), "prop_V": np.array([V]),
+                "rec": np.array([record(x)]), "prop_rec": np.array([record(x)]),
+                "details": one, "prop_details": {k: v.copy() for k, v in one.items()},
+                "final_state": {"x": np.array(x, copy=True), "e": float(e), "details": details},
+                "mm_sub_dH": dH, "mm_sub_acc": acc}
     return kernel
 
 
@@ -392,7 +471,7 @@ def ladder(a):
     ctxs, igs, rngs = [], [], []
     for w in range(K):
         system, groups, box = eh.mm_system(a.system)
-        ig = eh.proposal_integrator(a.L, a.dt_fs)
+        ig = eh.proposal_integrator(a.L, a.dt_fs, leg.temperature_K)
         ig.setRandomNumberSeed(base + 10 * w + 1 + SEED_STRIDE * k)
         c = eh.make_context(system, box, ig)
         eh.gm.set_state(c, a.state, len(groups))
@@ -409,7 +488,7 @@ def ladder(a):
     out.parent.mkdir(parents=True, exist_ok=True)
     ident = eh.model_identity(ckpt=a.head, backbone=a.backbone)
     want = {"system": a.system, "state": a.state, "start_rep": a.start, "start_frames": frames, "L": a.L, "dt_fs": a.dt_fs,
-            "dtype": a.dtype, "T_K": eh.gm.T, "E_construction": "local_E v1", **ident,
+            "dtype": a.dtype, "T_K": leg.temperature_K, "E_construction": "local_E v1", **ident,
             "leg": "solvent", "n_water": 50, "n_particles": system.getNumParticles(),
             "ligand_system_indices": list(map(int, leg.lig)), "groups": [list(map(int, g)) for g in leg.groups],
             "dummy_mask": leg.dummy(a.state).tolist(), "box_nm": np.asarray(box, float).tolist(),
@@ -423,9 +502,11 @@ def ladder(a):
         check_panel_contract(panel_contract, want)
         want["panel_initialization"] = panel
     kernel = panel_checked_kernel(panel) if panel is not None else eh.hmc
-    meta = run_ladder(ctxs, igs, me, rngs, rng_x, x0s, etas, a.sweeps, out, want, kernel, eh.KT,
+    if a.eta0_mm_updates > 1:
+        kernel = eta0_mm_kernel(kernel, a.eta0_mm_updates, panel)
+    meta = run_ladder(ctxs, igs, me, rngs, rng_x, x0s, etas, a.sweeps, out, want, kernel, leg.rt,
                       exchange=not a.no_exchange, checkpoint_every=a.checkpoint_every, coords_every=a.coords_every,
-                      extend_from=src, device=device)
+                      extend_from=src, device=device, eta0_mm_updates=a.eta0_mm_updates)
     print(f"{out.name}: complete={meta['complete']}; {meta['completed_sweeps']} sweeps; "
           f"ladder model calls {meta['model_calls_ladder']}", flush=True)
 
@@ -457,5 +538,7 @@ if __name__ == "__main__":
                     help="tag of a completed ladder (same contract, fewer sweeps) continued exactly into --tag")
     ap.add_argument("--checkpoint-every", type=int, default=50)
     ap.add_argument("--coords-every", type=int, default=10)
+    ap.add_argument("--eta0-mm-updates", type=int, default=1,
+                    help="MM-HMC substeps per sweep for the eta=0 label, one model query at their end; 1 = original kernel")
     a = ap.parse_args()
     {"ladder": ladder}[a.cmd](a)
