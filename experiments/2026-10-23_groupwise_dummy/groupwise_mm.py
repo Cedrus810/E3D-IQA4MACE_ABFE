@@ -1,4 +1,4 @@
-"""Group-by-group dummy MM sampling on an IBS solvent leg (DESIGN_2026-10-23_groupwise_dummy.md §3-§4).
+"""Group-by-group dummy MM sampling on a solvent leg (DESIGN_2026-10-23_groupwise_dummy.md §3-§4).
 
 Run: python groupwise_mm.py run SYSTEM REP [equil_ps] [prod_ps]   (states in series; resumable)
      python groupwise_mm.py analyze SYSTEM                        (adjacent BAR on MM energies, refill)
@@ -16,7 +16,7 @@ pair without an exception gets one with its full q_i q_j and LJ (as abfe_mm.py).
   on_g * 4 eps ((sig/r)^12 - (sig/r)^6) blows up when water sits on a dummy atom: at r < 3e-4 nm
   0 x overflow gives |F| 3.7e9 / NaN (debug/zero_times_inf.log; both 2026-10-23 5090 runs died so).
   Interaction group (group, environment), same cutoff, LRC on.
-Per state: Langevin 300 K (IBS legs), 1/ps, 2 fs, fixed box (pre_equil_final_state.npz);
+Per state: Langevin 300 K (IBS) or 298.15 K (acetamide), 1/ps, 2 fs, fixed input box;
 equil_ps, then prod_ps with a frame every 1 ps: full-box positions (float32, nm), and the reduced
 energy of the frame at every state (u_kn). States run in series, each starting from the previous
 state's last frame, so water fills the dummy volume by MD. One npz per (rep, state) in runs/SYSTEM/.
@@ -34,7 +34,8 @@ from openmm import app, unit
 HERE = pathlib.Path(__file__).resolve().parent
 E3D = HERE.parents[1]
 T = 300.0
-KT = 0.0083144626 * T
+R = 0.0083144626
+KT = R * T
 KJ = unit.kilojoule_per_mole
 DT_PS = 0.002
 ALPHA = 0.5
@@ -43,13 +44,37 @@ REF_IBS = {"PWWP1_ligand-8": (47.59, 0.27), "CyclophilinD_ligand-8": (60.63, 0.8
            "HSP90_ligand-27": (56.78, 0.45), "CyclophilinD_ligand-4": (65.24, 0.46)}
 
 
+def temperature(name):
+    """Preparation temperature of the current solvent inputs, in kelvin."""
+    return 298.15 if name == "acetamide" else T
+
+
+def thermal_energy(temperature_K):
+    value = float(temperature_K)
+    if not np.isfinite(value) or value <= 0:
+        raise ValueError("temperature must be finite and positive")
+    return R * value
+
+
+def input_dir(name):
+    return (E3D / "experiments/2026-10-15_acetamide_leg" if name == "acetamide"
+            else E3D / "data/solvent_legs_ibs" / name / "rep1")
+
+
 def leg(name):
-    r = E3D / "data/solvent_legs_ibs" / name / "rep1"
-    lig = json.load(open(r / "ligand_indices_solvent.json"))["ligand_indices"]
-    z = np.load(r / "pre_equil_final_state.npz")
-    groups = [g["system_index"] for g in json.load(open(HERE / "groups.json"))[name]["groups"]]
+    r = input_dir(name)
+    if name == "acetamide":
+        top = app.PDBxFile(str(r / "topology_solvent.cif")).topology
+        lig = [a.index for a in top.atoms() if a.residue.index == 0]
+        with np.load(r / "em_acetamide.npz", allow_pickle=False) as z:
+            pos, box = z["positions"].copy() / 10.0, np.diag(z["box"] / 10.0)
+    else:
+        lig = json.load(open(r / "ligand_indices_solvent.json"))["ligand_indices"]
+        with np.load(r / "pre_equil_final_state.npz", allow_pickle=False) as z:
+            pos, box = z["positions_nm"].copy(), z["box_nm"].copy()
+    groups = [g["system_index"] for g in json.loads((HERE / "groups.json").read_text())[name]["groups"]]
     assert sorted(a for g in groups for a in g) == sorted(lig)
-    return r / "system_solvent.xml", lig, groups, z["positions_nm"], z["box_nm"]
+    return r / "system_solvent.xml", lig, groups, pos, box
 
 
 def build(name):
@@ -106,6 +131,8 @@ def set_state(c, k, K):
 
 
 def run(name, rep, equil_ps=100.0, prod_ps=500.0):
+    T = temperature(name)
+    KT = thermal_energy(T)
     ref, system, groups, pos, box = build(name)
     K = len(groups)
     out_dir = HERE / "runs" / name
@@ -128,6 +155,8 @@ def run(name, rep, equil_ps=100.0, prod_ps=500.0):
         set_state(c, k, K)
         if out.exists():                                        # resume from the saved last frame
             z = np.load(out)
+            if ("T_K" in z and float(z["T_K"]) != T) or (name == "acetamide" and "T_K" not in z):
+                raise ValueError(f"{out}: missing or incompatible temperature; preserve the source run")
             c.setPositions(z["last_positions"])
             c.setVelocities(z["last_velocities"])
             continue
@@ -144,7 +173,7 @@ def run(name, rep, equil_ps=100.0, prod_ps=500.0):
                 u[m, s] = c.getState(getEnergy=True).getPotentialEnergy().value_in_unit(KJ) / KT
             set_state(c, k, K)
         st = c.getState(getPositions=True, getVelocities=True)
-        np.savez(out, u=u, xyz=xyz, box=np.asarray(box, np.float32), state=k,
+        np.savez(out, u=u, xyz=xyz, box=np.asarray(box, np.float32), state=k, T_K=T,
                  dummy=np.array([g for g in range(K) if g < k]),
                  last_positions=st.getPositions(asNumpy=True).value_in_unit(unit.nanometer),
                  last_velocities=st.getVelocities(asNumpy=True).value_in_unit(unit.nanometer / unit.picosecond))
@@ -169,6 +198,7 @@ def refill(z, groups, lig_heavy, water_O, r_cut=0.25):
 
 def analyze(name):
     from pymbar import other_estimators, timeseries
+    KT = thermal_energy(temperature(name))
     xml, lig, groups, _, _ = leg(name)
     K = len(groups)
     cif = app.PDBxFile(str(pathlib.Path(xml).parent / "topology_solvent.cif"))
@@ -185,6 +215,9 @@ def analyze(name):
             print(f"{name} rep {rep}: incomplete, skipped")
             continue
         zs = [np.load(f) for f in fs]
+        if any(("T_K" in z and float(z["T_K"]) != temperature(name)) or
+               (name == "acetamide" and "T_K" not in z) for z in zs):
+            raise ValueError("endpoint temperature differs from the input protocol")
         steps, tot = [], 0.0
         for k in range(K):
             wF = zs[k]["u"][k + 1] - zs[k]["u"][k]
@@ -200,8 +233,8 @@ def analyze(name):
         rf = [refill(z, groups, lig_heavy, water_O) for z in zs]
         summary[rep] = {"total": tot, "steps": steps, "refill_water_O_within_0.25nm": rf}
         ref = REF_IBS.get(name)
-        print(f"\n{name} rep {rep}: total {tot:+.2f} kJ/mol (sum of adjacent BAR on MM energies); "
-              f"IBS {ref[0]:+.2f} +- {ref[1]:.2f} [unverified]")
+        reference = f"; IBS {ref[0]:+.2f} +- {ref[1]:.2f} [unverified]" if ref else ""
+        print(f"\n{name} rep {rep}: total {tot:+.2f} kJ/mol (sum of adjacent BAR on MM energies){reference}")
         for s in steps:
             print(f"  G{s['group']}: BAR {s['dG']:+8.2f} +- {s['err']:.2f}   EXP fwd {s['EXP_fwd']:+8.2f}  "
                   f"rev {s['EXP_rev']:+8.2f}   n {s['nF']}/{s['nR']}")

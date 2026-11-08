@@ -1,0 +1,69 @@
+{
+  "identity": {
+    "E_construction": "local_E_bb_v1",
+    "attribution_definition": "head_raw_plus_global_remainder_v1",
+    "backbone": "/home/ruigengji/MLP/mace/MACE-POLAR-1-M.model",
+    "head": "/home/ruigengji/E3D/runs/polar-M/ckpt/joint_organic_n50000_c10000_lampool400_solvent_es_resp_v2_h256_s104000_nvar_N.pt",
+    "backbone_mtime": 1771815204.0,
+    "head_mtime": 1792972035.0,
+    "realspace_backend": "graph_longrange_stencil",
+    "realspace_modules": [
+      "coulomb_energy.realspace_energy:RealSpaceFiniteDiffereneEnergy:offset=0.02",
+      "electric_potential_descriptor.realspace_features:RealSpaceFiniteDifferenceElectrostaticFeatures:offset=0.1"
+    ],
+    "dtype": "float64",
+    "total_charge": 0,
+    "n_water": 50,
+    "omega_rule": "ligand + 50 nearest complete waters, periodic imaging (local_E v1 carve)"
+  },
+  "frames": [
+    {
+      "frame": 0,
+      "dU_K2": -11.55037105978758,
+      "q": 10.889844546520251,
+      "sum_d": -22.44021560630785,
+      "closure_sum_d_plus_q_minus_dU": -1.7763568394002505e-14,
+      "vs_step2_dU_K2": 0.0,
+      "vs_step2_q": -1.4495071809506044e-10,
+      "vs_step2_head_dU": 1.4496137623609684e-10,
+      "vs_step2_C_bb": 0.0,
+      "omega_same_as_step2": true
+    },
+    {
+      "frame": 500,
+      "dU_K2": -10.073043138592695,
+      "q": 11.26340399444247,
+      "sum_d": -21.336447133035165,
+      "closure_sum_d_plus_q_minus_dU": 0.0,
+      "vs_step2_dU_K2": 0.0,
+      "vs_step2_q": -7.355538400588557e-11,
+      "vs_step2_head_dU": 7.356959486060077e-11,
+      "vs_step2_C_bb": 0.0,
+      "omega_same_as_step2": true
+    },
+    {
+      "frame": 995,
+      "dU_K2": -7.236172915043426,
+      "q": 18.668947604214722,
+      "sum_d": -25.905120519258162,
+      "closure_sum_d_plus_q_minus_dU": -1.4210854715202004e-14,
+      "vs_step2_dU_K2": -1.4040466567166732e-09,
+      "vs_step2_q": -1.5259615793183912e-09,
+      "vs_step2_head_dU": 1.219007117470028e-10,
+      "vs_step2_C_bb": -1.4040466567166732e-09,
+      "omega_same_as_step2": true
+    }
+  ],
+  "repeat_dU_difference": 0.0,
+  "repeat_components_identical": true,
+  "S0_model_calls": 4,
+  "SK": {
+    "dU": 0.0,
+    "model_calls": 0,
+    "q": 0.0
+  },
+  "partial_dummy": "refused: K2 C_bb for partial-dummy endpoints is not defined (K2 contract \u00a72)",
+  "legacy_E_construction": "local_E v1",
+  "legacy_as_K2": "refused: chain contract differs: E_construction, attribution_definition, realspace_backend, realspace_modules, total_charge, omega_rule; preserve files and use a new tag",
+  "K2_as_legacy": "refused: chain contract differs: leg, eta, start_rep, L, dt_fs, E_construction, system_definition, context_parameters, box_nm, n_particles, ligand_system_indices, groups"
+}

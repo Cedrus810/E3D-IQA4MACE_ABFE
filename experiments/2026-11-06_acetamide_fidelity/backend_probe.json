@@ -1,0 +1,28 @@
+{
+  "scope": "installed evaluator mechanism on two analytic sites; not a quantitative model-error attribution",
+  "default_dtype": "float64",
+  "monopole_rotation_error_kJmol": 0.0,
+  "dipole_probe": [
+    {
+      "offset_A": 0.02,
+      "original_eV": -0.5447449242067677,
+      "rotated_eV": -0.5442988858158024,
+      "rotation_error_kJmol": 0.043036162237027185
+    },
+    {
+      "offset_A": 0.01,
+      "original_eV": -0.5444680053388353,
+      "rotated_eV": -0.544245120574729,
+      "rotation_error_kJmol": 0.021505110462544604
+    },
+    {
+      "offset_A": 0.005,
+      "original_eV": -0.5443296505598028,
+      "rotated_eV": -0.5442182421183617,
+      "rotation_error_kJmol": 0.010749280460045686
+    }
+  ],
+  "learned_model_forwards": 0,
+  "MD_steps": 0,
+  "dependency_changes": 0
+}

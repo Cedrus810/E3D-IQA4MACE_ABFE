@@ -35,11 +35,11 @@ CKPT = "/home/ruigengji/E3D/runs/polar-M/ckpt/joint_organic_n50000_c10000_lampoo
 EV = 96.485332                                   # kJ/mol per eV
 
 
-def load_model(ckpt=None, backbone=None):
-    bb = torch.load(backbone or BB, map_location="cpu", weights_only=False).to(torch.float32).to(DEV).eval()
+def load_model(ckpt=None, backbone=None, device=DEV):
+    bb = torch.load(backbone or BB, map_location="cpu", weights_only=False).to(torch.float32).to(device).eval()
     torch.manual_seed(0)
-    model = MACEDecomposition(bb, hidden=256, n_pair_channels=4).to(DEV).eval()
-    model.head.load_state_dict(torch.load(ckpt or CKPT, map_location=DEV))
+    model = MACEDecomposition(bb, hidden=256, n_pair_channels=4).to(device).eval()
+    model.head.load_state_dict(torch.load(ckpt or CKPT, map_location=device))
     for p in model.parameters():
         p.requires_grad_(False)
     return model
@@ -47,7 +47,7 @@ def load_model(ckpt=None, backbone=None):
 
 def topology(name):
     _, lig, groups, _, box = gm.leg(name)
-    cif = app.PDBxFile(str(gm.E3D / "data/solvent_legs_ibs" / name / "rep1/topology_solvent.cif"))
+    cif = app.PDBxFile(str(gm.input_dir(name) / "topology_solvent.cif"))
     atoms = list(cif.topology.atoms())
     numbers = np.array([a.element.atomic_number for a in atoms])
     resids = np.array([a.residue.index for a in atoms])
@@ -119,7 +119,8 @@ def ti(name, n_water=50):
         var += (sa ** 2 + sb ** 2) / 4
         print(f"  G{g + 1}: <D_gE> on {a:+9.2f} +- {sa:.2f}   off {b:+11.2f} +- {sb:.2f}   dG {dG:+9.2f}")
     ref = gm.REF_IBS.get(name)
-    print(f"  total {total:+.2f} +- {np.sqrt(var):.2f}   IBS {ref[0]:+.2f} +- {ref[1]:.2f} [unverified]")
+    reference = f"   IBS {ref[0]:+.2f} +- {ref[1]:.2f} [unverified]" if ref else ""
+    print(f"  total {total:+.2f} +- {np.sqrt(var):.2f}{reference}")
 
 
 if __name__ == "__main__":

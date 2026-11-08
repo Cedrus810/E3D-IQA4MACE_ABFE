@@ -2,6 +2,7 @@
 
 > 当前设计：[逐组 dummy、MM 采样、模型计算能量](DESIGN_2026-10-23_groupwise_dummy.md)。每个状态由 MM MD 采样；模型在端点上给出配体—环境耦合能量及其逐原子分解，模型不提供 MD 力。
 > 开工先读下文原理部分，再读 [HANDOFF_2026-10-28.md](HANDOFF_2026-10-28.md)。下文“状态”“仓库布局”里指向 RESEARCH_PLAN／STATUS／PROJECT_PLAN 的链接是旧记录，这些文件已移入 Archive。
+> 2026-11-07 K2 决策：局部 backbone 耦合决定总量，head 保留原子读出，原子贡献加独立全局结构余项共同闭合。当前先定义 S0／全 dummy 的整腿；运行代码尚未切换。现行公式与状态见主设计 §7.1／§7.5 和上述交接。
 
 [English](README.md) | **中文** | [日本語](README_ja.md)
 

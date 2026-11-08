@@ -1,0 +1,127 @@
+{
+  "inputs": {
+    "xml": "/home/ruigengji/E3D/experiments/2026-10-15_acetamide_leg/system_solvent.xml",
+    "cif": "/home/ruigengji/E3D/experiments/2026-10-15_acetamide_leg/topology_solvent.cif",
+    "npz": "/home/ruigengji/E3D/experiments/2026-10-15_acetamide_leg/em_acetamide.npz"
+  },
+  "input_identity_passed": true,
+  "system": "acetamide",
+  "temperature_K": 298.15,
+  "temperature_source": "/home/ruigengji/E3D/experiments/2026-10-15_acetamide_leg/prep_acetamide.py",
+  "n_particles": 2634,
+  "n_waters": 875,
+  "n_constraints": 2630,
+  "ligand_indices": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8
+  ],
+  "groups": {
+    "smiles": "CC(N)=O",
+    "groups": [
+      {
+        "kind": "methyl",
+        "heavy": [
+          0
+        ],
+        "atoms": [
+          0,
+          4,
+          5,
+          6
+        ],
+        "smiles": "[H]C([H])[H]",
+        "q": 0.021111666666666723,
+        "system_index": [
+          0,
+          4,
+          5,
+          6
+        ]
+      },
+      {
+        "kind": "polar",
+        "heavy": [
+          1,
+          2,
+          3
+        ],
+        "atoms": [
+          1,
+          2,
+          3,
+          7,
+          8
+        ],
+        "smiles": "[H]N([H])C=O",
+        "q": -0.02111166666666664,
+        "system_index": [
+          1,
+          2,
+          3,
+          7,
+          8
+        ]
+      }
+    ]
+  },
+  "ligand_charges_e": [
+    -0.17432233333333333,
+    0.6558776666666667,
+    -0.6832223333333334,
+    -0.6133223333333333,
+    0.06514466666666668,
+    0.06514466666666668,
+    0.06514466666666668,
+    0.3097776666666667,
+    0.3097776666666667
+  ],
+  "ligand_masses_Da": [
+    12.01,
+    12.01,
+    14.01,
+    16.0,
+    1.008,
+    1.008,
+    1.008,
+    1.008,
+    1.008
+  ],
+  "box_nm": [
+    [
+      2.9866719655820098,
+      0.0,
+      0.0
+    ],
+    [
+      0.0,
+      2.9866719655820098,
+      0.0
+    ],
+    [
+      0.0,
+      0.0,
+      2.9866719655820098
+    ]
+  ],
+  "max_cif_npz_difference_A": 4.999906655633879e-05,
+  "nonbonded_method": "4",
+  "cutoff_nm": 1.0,
+  "has_CM_motion_remover": true,
+  "model_cluster_atoms_for_50_waters": 159,
+  "new_model_queries": 0,
+  "new_MM_energy_evaluations": 0,
+  "new_MD_steps": 0,
+  "current_entrypoint_gaps": [
+    "groupwise_mm.leg and model_eval.topology resolve only the IBS input layout",
+    "MM bridge, endpoint kernels and analyses use 300 K constants; acetamide requires 298.15 K throughout",
+    "fresh independent S0 solvent starts under the current protocol are still required"
+  ],
+  "scope": "reusable input identity only; no new-protocol free energy or sampling acceptance"
+}

@@ -1,0 +1,12 @@
+{
+  "complete": false,
+  "scope": "bounded engineering validation only",
+  "temperature_K": 298.15,
+  "platform": "Reference",
+  "model_device": "cpu",
+  "max_MD_steps": 74,
+  "max_target_queries": 17,
+  "max_reference_forwards": 3,
+  "error": "ValueError: MM equivalence failed: {'name': 'S0_original_vs_grouped', 'dE': 0.004674039199016988, 'max_abs_dF': 9.094947017729282e-13}",
+  "seconds": 13.991073433018755
+}

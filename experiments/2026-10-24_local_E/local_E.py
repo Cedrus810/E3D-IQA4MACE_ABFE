@@ -61,6 +61,8 @@ class Leg:
     def __init__(self, name):
         from model_eval import topology
         self.name = name
+        self.temperature_K = gm.temperature(name)
+        self.rt = gm.thermal_energy(self.temperature_K)
         xml, self.lig, self.groups, _, _ = gm.leg(name)
         self.top = topology(name)                     # lig, groups, box, numbers, resids, resnames, keep
         ref = openmm.XmlSerializer.deserialize(open(xml).read())
@@ -216,11 +218,13 @@ def evaluate(a):
     for j in range(leg.K + 1):
         src = GW / "runs" / a.system / f"rep1_S{j}.npz"
         z = np.load(src)
+        if ("T_K" in z and float(z["T_K"]) != leg.temperature_K) or (a.system == "acetamide" and "T_K" not in z):
+            raise ValueError("source endpoint temperature is missing or incompatible")
         frames = np.arange(len(z["xyz"]))[:a.max_frames] if a.max_frames else np.arange(len(z["xyz"]))
         dm = leg.dummy(j)
         meta = {"system": a.system, "rep": 1, "endpoint": j, "K": leg.K, "n_water": a.n_water,
                 "source": str(src), "frames": frames.tolist(), "dummy": dm.tolist(),
-                "groups": [list(map(int, g)) for g in leg.groups], "T_K": gm.T, "backbone": BB, "head": CKPT,
+                "groups": [list(map(int, g)) for g in leg.groups], "T_K": leg.temperature_K, "backbone": BB, "head": CKPT,
                 "E_construction": "local_E v1: V - C^MM(bare Coulomb + cutoff LJ, Omega pairs) + C^ML(head+ES)"}
         out = out_dir / f"endpoint_{tag}_S{j}.npz"
         if out.exists():                                  # resume: reuse only if the content matches
@@ -243,7 +247,7 @@ def evaluate(a):
                     model = load_model()
                 ml[b:b + len(cl)] = couplings(model, [(p, n, f) for p, n, f, _ in cl], dm) * 96.485332
         ml[:, dm] = 0.0
-        V = z["u"][j][frames] * gm.KT
+        V = z["u"][j][frames] * leg.rt
         dU = ml.sum(1) - mm.sum((1, 2))
         tmp = out.with_suffix(".tmp.npz")
         np.savez(tmp, meta=json.dumps(meta), frames=frames, V=V, C_ML=ml, C_MM=mm, dU=dU,
@@ -265,11 +269,14 @@ def logmeanexp(x):
 def analyze(a):
     from pymbar import timeseries
     leg = Leg(a.system)
+    RT = leg.rt
     tag = f"N{a.n_water}"
     res = []
     print(f"{a.system}: endpoint correction a_j = -RT log <exp(-dU/RT)>_Vj, RT {RT:.4f} kJ/mol (kJ/mol)")
     for j in range(leg.K + 1):
         z = np.load(HERE / "runs" / a.system / f"endpoint_{tag}_S{j}.npz")
+        if json.loads(str(z["meta"]))["T_K"] != leg.temperature_K:
+            raise ValueError("model endpoint temperature differs from the input protocol")
         dU = z["dU"]
         x = -dU / RT
         aj = -RT * logmeanexp(x)

@@ -1,0 +1,349 @@
+{
+  "scope": "fixed diagnostic states; no equilibrium pooling or free-energy estimate",
+  "source_target": {
+    "system": "CyclophilinD_ligand-8",
+    "state": 0,
+    "head": "/home/ruigengji/E3D/runs/polar-M/ckpt/joint_organic_n50000_c10000_lampool400_solvent_es_resp_v2_h256_s104000_nvar_N.pt",
+    "backbone": "/home/ruigengji/MLP/mace/MACE-POLAR-1-M.model",
+    "T_K": 300.0,
+    "dtype": "float64",
+    "E_construction": "local_E v1"
+  },
+  "n_frames": 20,
+  "new_model_queries": 0,
+  "new_md_steps": 0,
+  "frames": [
+    {
+      "id": "panel:0",
+      "origin": "panel",
+      "source": "/home/ruigengji/E3D/experiments/2026-10-25_eta_hmc/logs/deep_shallow_panel_20261031.npz",
+      "frame": 0,
+      "expected_dU": -104.41274131336118,
+      "cached": {
+        "C_ML": -300.70910114367086,
+        "learned": -257.8347449664232,
+        "coulomb": -42.874356177247655,
+        "C_MM_es": -119.26135455418348,
+        "C_MM_lj": -77.03500527612623,
+        "dU": -104.41274131336118,
+        "max_closure_error": 1.4210854715202004e-14
+      }
+    },
+    {
+      "id": "panel:1",
+      "origin": "panel",
+      "source": "/home/ruigengji/E3D/experiments/2026-10-25_eta_hmc/logs/deep_shallow_panel_20261031.npz",
+      "frame": 1,
+      "expected_dU": -76.87657680625279,
+      "cached": {
+        "C_ML": -268.00993174594225,
+        "learned": -207.3264780468509,
+        "coulomb": -60.6834536990914,
+        "C_MM_es": -115.28987221341505,
+        "C_MM_lj": -75.8434827262745,
+        "dU": -76.87657680625279,
+        "max_closure_error": 2.842170943040401e-14
+      }
+    },
+    {
+      "id": "panel:2",
+      "origin": "panel",
+      "source": "/home/ruigengji/E3D/experiments/2026-10-25_eta_hmc/logs/deep_shallow_panel_20261031.npz",
+      "frame": 2,
+      "expected_dU": -58.414989675892656,
+      "cached": {
+        "C_ML": -278.31953999552314,
+        "learned": -259.503678490302,
+        "coulomb": -18.815861505221186,
+        "C_MM_es": -154.12811453669653,
+        "C_MM_lj": -65.77643578293392,
+        "dU": -58.414989675892656,
+        "max_closure_error": 3.552713678800501e-14
+      }
+    },
+    {
+      "id": "panel:3",
+      "origin": "panel",
+      "source": "/home/ruigengji/E3D/experiments/2026-10-25_eta_hmc/logs/deep_shallow_panel_20261031.npz",
+      "frame": 3,
+      "expected_dU": -74.77914390918579,
+      "cached": {
+        "C_ML": -270.7607019958848,
+        "learned": -240.94624129742994,
+        "coulomb": -29.81446069845487,
+        "C_MM_es": -124.04190777067335,
+        "C_MM_lj": -71.93965031602565,
+        "dU": -74.77914390918579,
+        "max_closure_error": 4.263256414560601e-14
+      }
+    },
+    {
+      "id": "panel:4",
+      "origin": "panel",
+      "source": "/home/ruigengji/E3D/experiments/2026-10-25_eta_hmc/logs/deep_shallow_panel_20261031.npz",
+      "frame": 4,
+      "expected_dU": -74.65412096558245,
+      "cached": {
+        "C_ML": -250.59791641914637,
+        "learned": -239.7702800023304,
+        "coulomb": -10.827636416815977,
+        "C_MM_es": -103.03154578334116,
+        "C_MM_lj": -72.91224967022276,
+        "dU": -74.65412096558245,
+        "max_closure_error": 1.4210854715202004e-14
+      }
+    },
+    {
+      "id": "panel:5",
+      "origin": "panel",
+      "source": "/home/ruigengji/E3D/experiments/2026-10-25_eta_hmc/logs/deep_shallow_panel_20261031.npz",
+      "frame": 5,
+      "expected_dU": -77.2818919392603,
+      "cached": {
+        "C_ML": -311.0299648014152,
+        "learned": -247.10830998468828,
+        "coulomb": -63.92165481672688,
+        "C_MM_es": -176.333961005271,
+        "C_MM_lj": -57.414111856883906,
+        "dU": -77.2818919392603,
+        "max_closure_error": 7.105427357601002e-14
+      }
+    },
+    {
+      "id": "panel:6",
+      "origin": "panel",
+      "source": "/home/ruigengji/E3D/experiments/2026-10-25_eta_hmc/logs/deep_shallow_panel_20261031.npz",
+      "frame": 6,
+      "expected_dU": -82.36463867918499,
+      "cached": {
+        "C_ML": -299.8618953758148,
+        "learned": -255.2505260693347,
+        "coulomb": -44.611369306480114,
+        "C_MM_es": -174.31072980198778,
+        "C_MM_lj": -43.186526894641965,
+        "dU": -82.36463867918499,
+        "max_closure_error": 2.842170943040401e-14
+      }
+    },
+    {
+      "id": "panel:7",
+      "origin": "panel",
+      "source": "/home/ruigengji/E3D/experiments/2026-10-25_eta_hmc/logs/deep_shallow_panel_20261031.npz",
+      "frame": 7,
+      "expected_dU": -76.55180778674884,
+      "cached": {
+        "C_ML": -222.70769279162084,
+        "learned": -201.15851080060088,
+        "coulomb": -21.54918199101993,
+        "C_MM_es": -87.16652552751694,
+        "C_MM_lj": -58.98935947735499,
+        "dU": -76.55180778674884,
+        "max_closure_error": 5.684341886080802e-14
+      }
+    },
+    {
+      "id": "A:label0:walker0",
+      "origin": "A",
+      "source": "/home/ruigengji/E3D/experiments/2026-10-25_eta_hmc/runs/CyclophilinD_ligand-8/tw_A_tw1_v1.npz",
+      "label": 0,
+      "walker": 0,
+      "expected_dU": -114.90295778190901,
+      "cached": {
+        "C_ML": -290.0612911544978,
+        "learned": -255.59153657619345,
+        "coulomb": -34.46975457830443,
+        "C_MM_es": -113.14629560867931,
+        "C_MM_lj": -62.01203776390952,
+        "dU": -114.90295778190901,
+        "max_closure_error": 1.4210854715202004e-14
+      }
+    },
+    {
+      "id": "A:label1:walker7",
+      "origin": "A",
+      "source": "/home/ruigengji/E3D/experiments/2026-10-25_eta_hmc/runs/CyclophilinD_ligand-8/tw_A_tw1_v1.npz",
+      "label": 1,
+      "walker": 7,
+      "expected_dU": -118.14002894230833,
+      "cached": {
+        "C_ML": -308.84686185987147,
+        "learned": -261.20753697517,
+        "coulomb": -47.63932488470149,
+        "C_MM_es": -123.51340459795864,
+        "C_MM_lj": -67.19342831960448,
+        "dU": -118.14002894230833,
+        "max_closure_error": 1.0658141036401503e-14
+      }
+    },
+    {
+      "id": "A:label11:walker10",
+      "origin": "A",
+      "source": "/home/ruigengji/E3D/experiments/2026-10-25_eta_hmc/runs/CyclophilinD_ligand-8/tw_A_tw1_v1.npz",
+      "label": 11,
+      "walker": 10,
+      "expected_dU": -111.66333987478052,
+      "cached": {
+        "C_ML": -266.1295271722452,
+        "learned": -216.44848211194676,
+        "coulomb": -49.681045060298466,
+        "C_MM_es": -113.13632898372974,
+        "C_MM_lj": -41.32985831373499,
+        "dU": -111.66333987478052,
+        "max_closure_error": 1.7763568394002505e-15
+      }
+    },
+    {
+      "id": "B:label0:walker1",
+      "origin": "B",
+      "source": "/home/ruigengji/E3D/experiments/2026-10-25_eta_hmc/runs/CyclophilinD_ligand-8/tw_B_tw1_v1.npz",
+      "label": 0,
+      "walker": 1,
+      "expected_dU": -80.6621939719316,
+      "cached": {
+        "C_ML": -243.42725250505967,
+        "learned": -235.69013525491576,
+        "coulomb": -7.73711725014388,
+        "C_MM_es": -88.7947961711736,
+        "C_MM_lj": -73.97026236195443,
+        "dU": -80.6621939719316,
+        "max_closure_error": 1.7763568394002505e-15
+      }
+    },
+    {
+      "id": "B:label1:walker0",
+      "origin": "B",
+      "source": "/home/ruigengji/E3D/experiments/2026-10-25_eta_hmc/runs/CyclophilinD_ligand-8/tw_B_tw1_v1.npz",
+      "label": 1,
+      "walker": 0,
+      "expected_dU": -28.09846557075383,
+      "cached": {
+        "C_ML": -201.08537857300632,
+        "learned": -188.58261847091197,
+        "coulomb": -12.50276010209435,
+        "C_MM_es": -138.13736563011457,
+        "C_MM_lj": -34.84954737213794,
+        "dU": -28.09846557075383,
+        "max_closure_error": 3.197442310920451e-14
+      }
+    },
+    {
+      "id": "B:label11:walker9",
+      "origin": "B",
+      "source": "/home/ruigengji/E3D/experiments/2026-10-25_eta_hmc/runs/CyclophilinD_ligand-8/tw_B_tw1_v1.npz",
+      "label": 11,
+      "walker": 9,
+      "expected_dU": -73.05355690155918,
+      "cached": {
+        "C_ML": -209.67421996783602,
+        "learned": -207.0609660121963,
+        "coulomb": -2.6132539556397045,
+        "C_MM_es": -93.20612882904346,
+        "C_MM_lj": -43.414534237233376,
+        "dU": -73.05355690155918,
+        "max_closure_error": 3.552713678800501e-15
+      }
+    },
+    {
+      "id": "CA:label0:walker10",
+      "origin": "CA",
+      "source": "/home/ruigengji/E3D/experiments/2026-10-25_eta_hmc/runs/CyclophilinD_ligand-8/tw_CA_tw1_v1.npz",
+      "label": 0,
+      "walker": 10,
+      "expected_dU": -105.8050120595694,
+      "cached": {
+        "C_ML": -287.02023787129383,
+        "learned": -234.92319848013437,
+        "coulomb": -52.097039391159484,
+        "C_MM_es": -120.0421367919937,
+        "C_MM_lj": -61.173089019730675,
+        "dU": -105.8050120595694,
+        "max_closure_error": 7.105427357601002e-14
+      }
+    },
+    {
+      "id": "CA:label1:walker6",
+      "origin": "CA",
+      "source": "/home/ruigengji/E3D/experiments/2026-10-25_eta_hmc/runs/CyclophilinD_ligand-8/tw_CA_tw1_v1.npz",
+      "label": 1,
+      "walker": 6,
+      "expected_dU": -113.56403839057208,
+      "cached": {
+        "C_ML": -310.29146309433844,
+        "learned": -266.5260546475261,
+        "coulomb": -43.765408446812295,
+        "C_MM_es": -118.0918867432514,
+        "C_MM_lj": -78.63553796051478,
+        "dU": -113.56403839057208,
+        "max_closure_error": 1.4210854715202004e-13
+      }
+    },
+    {
+      "id": "CA:label11:walker3",
+      "origin": "CA",
+      "source": "/home/ruigengji/E3D/experiments/2026-10-25_eta_hmc/runs/CyclophilinD_ligand-8/tw_CA_tw1_v1.npz",
+      "label": 11,
+      "walker": 3,
+      "expected_dU": -111.26580168090129,
+      "cached": {
+        "C_ML": -279.1471086935598,
+        "learned": -240.8090473905069,
+        "coulomb": -38.3380613030529,
+        "C_MM_es": -112.7551777156368,
+        "C_MM_lj": -55.12612929702176,
+        "dU": -111.26580168090129,
+        "max_closure_error": 4.263256414560601e-14
+      }
+    },
+    {
+      "id": "CB:label0:walker10",
+      "origin": "CB",
+      "source": "/home/ruigengji/E3D/experiments/2026-10-25_eta_hmc/runs/CyclophilinD_ligand-8/tw_CB_tw1_v1.npz",
+      "label": 0,
+      "walker": 10,
+      "expected_dU": -80.56594635375762,
+      "cached": {
+        "C_ML": -253.96115981009038,
+        "learned": -241.6402511933203,
+        "coulomb": -12.320908616770065,
+        "C_MM_es": -97.03547143406573,
+        "C_MM_lj": -76.35974202226711,
+        "dU": -80.56594635375762,
+        "max_closure_error": 4.263256414560601e-14
+      }
+    },
+    {
+      "id": "CB:label1:walker6",
+      "origin": "CB",
+      "source": "/home/ruigengji/E3D/experiments/2026-10-25_eta_hmc/runs/CyclophilinD_ligand-8/tw_CB_tw1_v1.npz",
+      "label": 1,
+      "walker": 6,
+      "expected_dU": -71.16782104265687,
+      "cached": {
+        "C_ML": -250.44602070767593,
+        "learned": -236.98639293491962,
+        "coulomb": -13.459627772756322,
+        "C_MM_es": -110.38693969361361,
+        "C_MM_lj": -68.89125997140549,
+        "dU": -71.16782104265687,
+        "max_closure_error": 1.4210854715202004e-14
+      }
+    },
+    {
+      "id": "CB:label11:walker3",
+      "origin": "CB",
+      "source": "/home/ruigengji/E3D/experiments/2026-10-25_eta_hmc/runs/CyclophilinD_ligand-8/tw_CB_tw1_v1.npz",
+      "label": 11,
+      "walker": 3,
+      "expected_dU": -78.66755177550144,
+      "cached": {
+        "C_ML": -248.25325949744962,
+        "learned": -234.12599913717378,
+        "coulomb": -14.12726036027583,
+        "C_MM_es": -100.38214053743152,
+        "C_MM_lj": -69.20356718451674,
+        "dU": -78.66755177550144,
+        "max_closure_error": 7.105427357601002e-14
+      }
+    }
+  ]
+}

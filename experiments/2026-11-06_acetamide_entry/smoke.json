@@ -1,0 +1,89 @@
+{
+  "complete": true,
+  "scope": "bounded engineering validation only",
+  "temperature_K": 298.15,
+  "platform": "Reference",
+  "model_device": "cpu",
+  "max_MD_steps": 74,
+  "max_target_queries": 17,
+  "max_reference_forwards": 3,
+  "MM_checks": [
+    {
+      "name": "S0_original_vs_grouped",
+      "dE": 0.004674039199016988,
+      "max_abs_dF": 9.094947017729282e-13
+    },
+    {
+      "name": "S0_grouped_vs_bridge",
+      "dE": 0.0,
+      "max_abs_dF": 0.0
+    },
+    {
+      "name": "S1_grouped_vs_bridge",
+      "dE": 0.0,
+      "max_abs_dF": 0.0
+    },
+    {
+      "name": "S2_grouped_vs_bridge",
+      "dE": 0.0,
+      "max_abs_dF": 0.0
+    },
+    {
+      "name": "S0_original_vs_grouped_without_tail",
+      "dE": 2.1827872842550278e-11,
+      "max_abs_dF": 9.094947017729282e-13
+    },
+    {
+      "name": "atomic_sync",
+      "group": 0,
+      "el": 0.5,
+      "on": 1.0,
+      "dE_sync": 0.0,
+      "derivative_sum_difference": 2.9103830456733704e-11
+    },
+    {
+      "name": "atomic_sync",
+      "group": 0,
+      "el": 0.0,
+      "on": 0.5,
+      "dE_sync": 7.275957614183426e-12,
+      "derivative_sum_difference": -1.2434497875801753e-14
+    },
+    {
+      "name": "atomic_sync",
+      "group": 1,
+      "el": 0.5,
+      "on": 1.0,
+      "dE_sync": 7.275957614183426e-12,
+      "derivative_sum_difference": 2.9103830456733704e-11
+    },
+    {
+      "name": "atomic_sync",
+      "group": 1,
+      "el": 0.0,
+      "on": 0.5,
+      "dE_sync": 0.0,
+      "derivative_sum_difference": -3.552713678800501e-15
+    }
+  ],
+  "bridge": {
+    "path": "/home/ruigengji/E3D/experiments/2026-11-06_acetamide_entry/mm/runs/acetamide/rep1_entry_smoke",
+    "windows": 5,
+    "integration_steps": 50,
+    "completed_reuse_passed": true,
+    "wrong_temperature_rejected_without_overwrite": true,
+    "scope": "engineering only; two-point charge/LJ schedule and ten frames per window"
+  },
+  "model": {
+    "target_queries": 17,
+    "reference_forwards": 3,
+    "integration_steps": 24,
+    "fixed_frame_dU": -31.799021908114653,
+    "fixed_frame_C_bb": -112.83626476980568,
+    "head_minus_backbone": -20.13167417061912,
+    "backbone_minus_MM": -11.667347737495533,
+    "model_repeat_difference": 0.0,
+    "atomic_records_and_report_passed": true
+  },
+  "seconds": 145.74661309301155
+}

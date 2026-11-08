@@ -1,0 +1,222 @@
+{
+  "scope": "fixed correlated geometry probes; backbone fidelity only",
+  "source": "/home/ruigengji/E3D/experiments/2026-11-06_acetamide_fidelity/evaluation.partial.json",
+  "acceptance_passed": false,
+  "acceptance_error": "ValueError: a symmetry control failed",
+  "heads": {
+    "old": {
+      "input_error": -23.027185009514298,
+      "fixed_panel_bias": -23.801321846906934,
+      "error_min": -31.737156897373367,
+      "error_max": -18.81736391277194,
+      "RMSE_after_mean_removal": 2.536703832646586,
+      "response": {
+        "ligand_translation": {
+          "n": 6,
+          "rms_reference": 1.5727367351226487,
+          "rmse_error": 0.6942723201486888,
+          "slope_through_origin": 1.4019533566237026,
+          "max_abs_error": 0.9223678597392535
+        },
+        "ligand_rotation": {
+          "n": 6,
+          "rms_reference": 2.947844600202451,
+          "rmse_error": 2.3501002386327654,
+          "slope_through_origin": 1.3321730012208217,
+          "max_abs_error": 4.20982109674236
+        },
+        "water_translation": {
+          "n": 6,
+          "rms_reference": 0.041842927254036495,
+          "rmse_error": 0.09039722836071552,
+          "slope_through_origin": 1.5759918842300134,
+          "max_abs_error": 0.12706332018296962
+        },
+        "saved_mm": {
+          "n": 4,
+          "rms_reference": 8.24561270681118,
+          "rmse_error": 5.605947846125335,
+          "slope_through_origin": 1.1249928641773252,
+          "max_abs_error": 8.70997188785907
+        }
+      }
+    },
+    "v2": {
+      "input_error": -20.306233530020208,
+      "fixed_panel_bias": -21.00829330223896,
+      "error_min": -29.322397152134172,
+      "error_max": -17.222308331951496,
+      "RMSE_after_mean_removal": 2.2925328681045323,
+      "response": {
+        "ligand_translation": {
+          "n": 6,
+          "rms_reference": 1.5727367351226487,
+          "rmse_error": 0.3241291159889296,
+          "slope_through_origin": 0.96486517698337,
+          "max_abs_error": 0.5574009221075471
+        },
+        "ligand_rotation": {
+          "n": 6,
+          "rms_reference": 2.947844600202451,
+          "rmse_error": 1.5869978429448452,
+          "slope_through_origin": 1.0323258649514209,
+          "max_abs_error": 3.0839251980687123
+        },
+        "water_translation": {
+          "n": 6,
+          "rms_reference": 0.041842927254036495,
+          "rmse_error": 0.07536339891975254,
+          "slope_through_origin": 1.9152588751010498,
+          "max_abs_error": 0.0906044777259325
+        },
+        "saved_mm": {
+          "n": 4,
+          "rms_reference": 8.24561270681118,
+          "rmse_error": 5.395411783451533,
+          "slope_through_origin": 0.964954400788477,
+          "max_abs_error": 9.016163622113964
+        }
+      }
+    },
+    "nvar_a": {
+      "input_error": -23.429194194644637,
+      "fixed_panel_bias": -23.92852130492913,
+      "error_min": -31.50403108595539,
+      "error_max": -20.972020687960892,
+      "RMSE_after_mean_removal": 2.0386122794948904,
+      "response": {
+        "ligand_translation": {
+          "n": 6,
+          "rms_reference": 1.5727367351226487,
+          "rmse_error": 0.7279460096571315,
+          "slope_through_origin": 0.9870146099070781,
+          "max_abs_error": 1.1318048594538652
+        },
+        "ligand_rotation": {
+          "n": 6,
+          "rms_reference": 2.947844600202451,
+          "rmse_error": 1.484985898949889,
+          "slope_through_origin": 0.8930889358978742,
+          "max_abs_error": 2.457173506683745
+        },
+        "water_translation": {
+          "n": 6,
+          "rms_reference": 0.041842927254036495,
+          "rmse_error": 0.00934772196283312,
+          "slope_through_origin": 1.0619731504944019,
+          "max_abs_error": 0.014418770492383715
+        },
+        "saved_mm": {
+          "n": 4,
+          "rms_reference": 8.24561270681118,
+          "rmse_error": 4.607333805825116,
+          "slope_through_origin": 0.8899220925697494,
+          "max_abs_error": 8.074836891310753
+        }
+      }
+    },
+    "nvar_b": {
+      "input_error": -20.13167417061912,
+      "fixed_panel_bias": -20.376924853362095,
+      "error_min": -26.758592938228006,
+      "error_max": -17.40472281560423,
+      "RMSE_after_mean_removal": 1.74298810376545,
+      "response": {
+        "ligand_translation": {
+          "n": 6,
+          "rms_reference": 1.5727367351226487,
+          "rmse_error": 0.5190891368483544,
+          "slope_through_origin": 1.151521532946752,
+          "max_abs_error": 0.8372355151294926
+        },
+        "ligand_rotation": {
+          "n": 6,
+          "rms_reference": 2.947844600202451,
+          "rmse_error": 1.434109129920765,
+          "slope_through_origin": 1.035129532331346,
+          "max_abs_error": 2.72695135501489
+        },
+        "water_translation": {
+          "n": 6,
+          "rms_reference": 0.041842927254036495,
+          "rmse_error": 0.01286780896853219,
+          "slope_through_origin": 1.0683491406235814,
+          "max_abs_error": 0.02581864186585392
+        },
+        "saved_mm": {
+          "n": 4,
+          "rms_reference": 8.24561270681118,
+          "rmse_error": 3.7848330931724896,
+          "slope_through_origin": 0.8049903735174846,
+          "max_abs_error": 6.626918767608885
+        }
+      }
+    }
+  },
+  "fixed_panel_frames": 23,
+  "controls": [
+    {
+      "id": "control:translation",
+      "C_bb_difference": 0.0,
+      "C_MM_difference": -2.984279490192421e-13,
+      "heads": {
+        "old": {
+          "total_difference": 8.384404281969182e-12,
+          "max_atom_difference": 7.820410985459603e-11
+        },
+        "v2": {
+          "total_difference": 8.270717444247566e-12,
+          "max_atom_difference": 7.815614821993222e-11
+        },
+        "nvar_a": {
+          "total_difference": 8.242295734817162e-12,
+          "max_atom_difference": 7.820233349775663e-11
+        },
+        "nvar_b": {
+          "total_difference": 8.242295734817162e-12,
+          "max_atom_difference": 7.820233349775663e-11
+        }
+      }
+    },
+    {
+      "id": "control:rotation",
+      "C_bb_difference": 0.039614015665179636,
+      "C_MM_difference": 1.3926637620897964e-12,
+      "heads": {
+        "old": {
+          "total_difference": -0.0027583330096945247,
+          "max_atom_difference": 0.029915986466946265
+        },
+        "v2": {
+          "total_difference": -0.0027583525767624906,
+          "max_atom_difference": 0.029916002578582734
+        },
+        "nvar_a": {
+          "total_difference": -0.0027583450254553554,
+          "max_atom_difference": 0.02991600266432748
+        },
+        "nvar_b": {
+          "total_difference": -0.002758345895074399,
+          "max_atom_difference": 0.029916009919599862
+        }
+      }
+    }
+  ],
+  "max_cached_feature_atom_error": 1.4210854715202004e-14,
+  "panel_selection_audit": {
+    "scope": "saved panel selection and rotated geometry audit; no model calls",
+    "selected_water": [
+      309,
+      310,
+      311
+    ],
+    "periodic_nearest_water": [
+      675,
+      676,
+      677
+    ],
+    "selection_deviation": "initial run selected a fixed Omega water using raw coordinates; it was not the periodic nearest water; all original probes retained; selector corrected for future panels",
+    "same_cluster_order": true,
+    "rotated_geometry_max_abs_difference_A": 1.7763568394002505e-14
+  }
+}

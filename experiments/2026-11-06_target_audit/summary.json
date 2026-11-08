@@ -1,0 +1,140 @@
+{
+  "source": "/home/ruigengji/E3D/experiments/2026-11-06_target_audit/reference_cpu.json",
+  "scope": "descriptive fixed-frame and paired endpoint differences, not equilibrium statistics",
+  "all_caches_reproduced": true,
+  "max_abs_cache_dU_difference": 2.7895154630641628e-08,
+  "grouped": {
+    "panel": {
+      "n": 8,
+      "head_minus_backbone": {
+        "mean": -11.510090776019911,
+        "min": -17.29977023022286,
+        "max": -2.5868760465145897
+      },
+      "backbone_minus_MM": {
+        "mean": -66.65689810846732,
+        "min": -91.14275276181652,
+        "max": -55.82811362895356
+      },
+      "C_bb": {
+        "mean": -263.739502257661,
+        "min": -294.65176000208567,
+        "max": -205.40792256128836
+      }
+    },
+    "A": {
+      "n": 3,
+      "head_minus_backbone": {
+        "mean": -22.277542830137435,
+        "min": -28.640709331916526,
+        "max": -17.565382885934554
+      },
+      "backbone_minus_MM": {
+        "mean": -92.62456604569827,
+        "min": -97.51349269764233,
+        "max": -86.26224845043672
+      },
+      "C_bb": {
+        "mean": -266.06835057490383,
+        "min": -288.22032561520547,
+        "max": -248.56414428648046
+      }
+    },
+    "B": {
+      "n": 3,
+      "head_minus_backbone": {
+        "mean": -15.033483144643943,
+        "min": -22.158567224549984,
+        "max": -4.203161342658973
+      },
+      "backbone_minus_MM": {
+        "mean": -45.5712556702205,
+        "min": -61.923473104724394,
+        "max": -23.895304228542386
+      },
+      "C_bb": {
+        "mean": -203.02880053743965,
+        "min": -224.68853163785244,
+        "max": -187.51565274367152
+      }
+    },
+    "CA": {
+      "n": 3,
+      "head_minus_backbone": {
+        "mean": -16.33326248768598,
+        "min": -17.398264262537907,
+        "max": -15.21031836509843
+      },
+      "backbone_minus_MM": {
+        "mean": -93.87835488907096,
+        "min": -97.17283355465133,
+        "max": -90.59469369470779
+      },
+      "C_bb": {
+        "mean": -275.81967406512064,
+        "min": -293.9002582584176,
+        "max": -261.74884443051224
+      }
+    },
+    "CB": {
+      "n": 3,
+      "head_minus_backbone": {
+        "mean": -16.871722710838856,
+        "min": -19.342986156474808,
+        "max": -15.392776169227375
+      },
+      "backbone_minus_MM": {
+        "mean": -59.92871701351962,
+        "min": -64.68654054768874,
+        "max": -51.82483488729045
+      },
+      "C_bb": {
+        "mean": -234.01509062795301,
+        "min": -238.08175400402152,
+        "max": -231.10303455230957
+      }
+    }
+  },
+  "paired_b0_changes": [
+    {
+      "origin": "A",
+      "initial": "panel:0",
+      "final": "A:label0:walker0",
+      "difference": {
+        "dU": -10.490216468000312,
+        "head_minus_backbone": -15.370720779380179,
+        "backbone_minus_MM": 4.880504311379809
+      }
+    },
+    {
+      "origin": "B",
+      "initial": "panel:4",
+      "final": "B:label0:walker1",
+      "difference": {
+        "dU": -6.008073005620375,
+        "head_minus_backbone": -3.0841850920076297,
+        "backbone_minus_MM": -2.9238879136127025
+      }
+    },
+    {
+      "origin": "CA",
+      "initial": "panel:0",
+      "final": "CA:label0:walker10",
+      "difference": {
+        "dU": -1.392270745453402,
+        "head_minus_backbone": -1.9403298125620836,
+        "backbone_minus_MM": 0.5480590671087384
+      }
+    },
+    {
+      "origin": "CB",
+      "initial": "panel:4",
+      "final": "CB:label0:walker10",
+      "difference": {
+        "dU": -5.911825388676164,
+        "head_minus_backbone": -0.22487003209914747,
+        "backbone_minus_MM": -5.6869553565770445
+      }
+    }
+  ]
+}

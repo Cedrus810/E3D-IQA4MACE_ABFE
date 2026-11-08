@@ -1,0 +1,58 @@
+{
+  "data_audit": {
+    "files": [
+      "/home/ruigengji/E3D/experiments/2026-11-07_head_calibration/mm/prep1_S0_r_s5.json",
+      "/home/ruigengji/E3D/experiments/2026-11-07_head_calibration/mm/prep2_S0_r_s5.json",
+      "/home/ruigengji/E3D/experiments/2026-11-07_head_calibration/mm/prep3_S0_r_s5.json",
+      "/home/ruigengji/E3D/experiments/2026-11-07_head_calibration/mm/prep4_S0_r_s5.json",
+      "/home/ruigengji/E3D/experiments/2026-11-07_head_calibration/mm/prep5_S0_r_s5.json",
+      "/home/ruigengji/E3D/experiments/2026-11-07_head_calibration/mm/prep6_S0_r_s5.json",
+      "/home/ruigengji/E3D/experiments/2026-11-07_head_calibration/mm/prep7_S0_r_s5.json",
+      "/home/ruigengji/E3D/experiments/2026-11-07_head_calibration/mm/prep8_S0_r_s5.json",
+      "/home/ruigengji/E3D/experiments/2026-11-07_head_calibration/mm/prep9_S0_r_s5.json",
+      "/home/ruigengji/E3D/experiments/2026-11-07_head_calibration/mm/prep10_S0_r_s5.json"
+    ],
+    "identity": {
+      "N": 50,
+      "head": "/home/ruigengji/E3D/runs/polar-M/ckpt/joint_organic_n50000_c10000_lampool400_solvent_es_resp_v2_h256_s104000_nvar_N.pt",
+      "backbone": "/home/ruigengji/MLP/mace/MACE-POLAR-1-M.model",
+      "dtype": "float64",
+      "units": "kJ/mol"
+    },
+    "n_frames": 2000,
+    "mean_r": -16.442813114333475,
+    "sd_r": 6.615348589704621,
+    "SE_from_seed_run_means": 0.10932146900423924,
+    "validation_RMSE_after_constant_shift": 6.708450899976162,
+    "sd_deltaU_head": 10.359686410595073,
+    "sd_deltaU_backbone": 10.376580607039168,
+    "mean_deltaU_backbone_MM_ensemble": -11.562862651105949,
+    "scope": "MM S0 ensemble; distinct random seeds share the same initial geometry; no eta=1 claim"
+  },
+  "finite_state": {
+    "kind": "exact four-state independent arithmetic; not molecular acceptance",
+    "a_K2_exact": 0.1584902459511781,
+    "A_head_atom_TI": [
+      1.0648734216117768,
+      -0.477793176572083
+    ],
+    "R0_structural_TI": -0.42858999657521685,
+    "f_atom": [
+      1.1964121660379659,
+      1.3464508447236612
+    ],
+    "f_remainder": 0.42858999657521685,
+    "total_exact": 2.9714530133529227,
+    "total_closure": 6.016079023840604e-09,
+    "numerical_r_MM": 3.50278028804496e-09,
+    "numerical_r_eta": -2.5132988468179462e-09,
+    "changed_head_total_difference": 2.4980018054066022e-15,
+    "negative_controls": {
+      "MM_mean_q": -0.051392711113441576,
+      "separate_a_K2_minus_a_head": -0.6354514413688692
+    }
+  },
+  "new_target_queries": 0,
+  "new_backbone_forwards": 0,
+  "new_MD_steps": 0
+}

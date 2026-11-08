@@ -1,4 +1,4 @@
-"""Group-internal MM bridge windows on an IBS solvent leg (DESIGN_2026-10-23_groupwise_dummy.md §3, §4.2, §5, §7.3).
+"""Group-internal MM bridge windows on a solvent leg (DESIGN_2026-10-23_groupwise_dummy.md §3, §4.2, §5, §7.3).
 
 Run: python bridge_mm.py check   SYSTEM [--frames 3]                         endpoint equivalence, charge window
      python bridge_mm.py run     SYSTEM REP --groups 1 [--elec 1,0.5,0] [--vdw 1,0.8,0.6,0.4,0.2,0]
@@ -15,7 +15,8 @@ after g coupled:
     (el_g, on_g) = (1, 1) = S_{k-1} -> (elec[i], 1) ... -> (0, 1) -> (0, vdw[i]) ... -> (0, 0) = S_k
 The windows of consecutive groups form one sequence; the shared endpoint is one window.
 
-Per window (§5): Langevin 300 K, 1/ps, 2 fs, fixed box; equil_ps, then prod_ps with a frame every frame_ps:
+Per window (§5): Langevin at the input temperature (300 K IBS, 298.15 K acetamide), 1/ps, 2 fs, fixed box;
+equil_ps, then prod_ps with a frame every frame_ps:
 full-box positions (float32, nm), time, and the reduced energies of the frame at the previous, own and next
 window (u, rows prev/self/next; NaN where there is none). Windows run in series, each from the previous
 window's last state. One npz per window, written to a temporary file and renamed when complete; it carries the
@@ -171,6 +172,7 @@ def renew_neighbours(c, out, z, old, want, nb_p):
     from its saved frames (float32 positions, so prev / self / next stay consistent within the window),
     keep its samples. Prints the change of the self row against the energies computed during the run."""
     t = time.perf_counter()
+    KT = gm.thermal_energy(old["T_K"])
     u = np.full_like(z["u"], np.nan)
     for s, x in enumerate(z["xyz"]):
         c.setPositions(x.astype(np.float64))
@@ -194,6 +196,8 @@ def run_dir(a):
 
 
 def run(a):
+    T = gm.temperature(a.system)
+    KT = gm.thermal_energy(T)
     ref, system, groups, pos, box = build(a.system)
     K = len(groups)
     ks = [int(x) for x in a.groups.split(",")]
@@ -208,16 +212,24 @@ def run(a):
            "friction_per_ps": 1.0, "equil_ps": a.equil_ps, "prod_ps": a.prod_ps, "frame_ps": a.frame_ps,
            "seed": seed, "system_xml": str(gm.leg(a.system)[0]), "groups_json": str(gm.HERE / "groups.json"),
            "alpha": gm.ALPHA, "windows": [{k: w[k] for k in ("label", "group", "el", "on", "endpoint")} for w in seq]}
-    json.dump(cfg, open(d / "config.json", "w"), indent=1)
+    config_path = d / "config.json"
+    if config_path.exists():
+        old_config = json.loads(config_path.read_text())
+        changed = [k for k in cfg if k not in ("groups", "windows") and old_config.get(k) != cfg[k]]
+        if changed:
+            raise ValueError(f"existing bridge config differs ({', '.join(changed)}); preserve it and use another --tag")
+    config_path.write_text(json.dumps(cfg, indent=1) + "\n")
     integ = openmm.LangevinMiddleIntegrator(T * unit.kelvin, 1.0 / unit.picosecond, DT_PS * unit.picosecond)
     integ.setRandomNumberSeed(seed)
     c = context(system, box, integ)
     if ks[0] == 1:                                               # S0 from the leg's pre-equilibrated state
-        start = {"source": "pre_equil_final_state.npz"}
+        start = {"source": str(gm.input_dir(a.system) / ("em_acetamide.npz" if a.system == "acetamide" else "pre_equil_final_state.npz"))}
         c.setPositions(pos)
         c.setVelocitiesToTemperature(T * unit.kelvin, seed)
     else:                                                        # S_{k-1} from the groupwise_mm endpoint run
         z = np.load(gm.HERE / "runs" / a.system / f"rep{a.rep}_S{ks[0] - 1}.npz")
+        if ("T_K" in z and float(z["T_K"]) != T) or (a.system == "acetamide" and "T_K" not in z):
+            raise ValueError("source endpoint temperature is missing or incompatible")
         start = {"source": f"groupwise_mm rep{a.rep}_S{ks[0] - 1}.npz last frame"}
         c.setPositions(z["last_positions"])
         c.setVelocities(z["last_velocities"])
@@ -302,10 +314,16 @@ def bar_pair(wF, wR):
 def analyze(a):
     d = run_dir(a)
     cfg = json.load(open(d / "config.json"))
+    KT = gm.thermal_energy(cfg["T_K"])
     files = [d / f"w{m:03d}_{w['label']}.npz" for m, w in enumerate(cfg["windows"])]
     have = [f.exists() for f in files]
     print(f"{a.system} rep {a.rep}{a.tag}: {sum(have)}/{len(files)} windows present (kJ/mol, kT {KT:.4f})")
     zs = [np.load(f) if h else None for f, h in zip(files, have)]
+    for z in zs:
+        if z is not None:
+            meta = json.loads(str(z["meta"]))
+            if meta["T_K"] != cfg["T_K"] or meta["kT_kJmol"] != KT:
+                raise ValueError("bridge window temperature differs from its config")
     out, per_group = [], {}
     print("  pair                                   BAR      +- dBAR   halves (1st / 2nd)      sd(wF) sd(wR) kT   nF/nR")
     for m in range(len(files) - 1):

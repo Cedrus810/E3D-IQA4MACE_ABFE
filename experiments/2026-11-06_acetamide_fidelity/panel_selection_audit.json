@@ -1,0 +1,16 @@
+{
+  "scope": "saved panel selection and rotated geometry audit; no model calls",
+  "selected_water": [
+    309,
+    310,
+    311
+  ],
+  "periodic_nearest_water": [
+    675,
+    676,
+    677
+  ],
+  "selection_deviation": "initial run selected a fixed Omega water using raw coordinates; it was not the periodic nearest water; all original probes retained; selector corrected for future panels",
+  "same_cluster_order": true,
+  "rotated_geometry_max_abs_difference_A": 1.7763568394002505e-14
+}

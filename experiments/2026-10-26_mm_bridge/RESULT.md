@@ -100,7 +100,8 @@ G2 冒烟同样显示电荷段 Δel=0.5 时 sd(w) 达到 2.4 kT、LJ 段 on 0.4�
 ### 正式运行：CypD-8 G1，rep1–3，每窗 500 帧（2026-11-01）
 
 脚本 `run_atom_deriv_G1.sh`／`pbs_atom_deriv_G1.zsh`（host 写的是 yayoi28）。用户报告"跑完了"。
-目录里找不到 PBS 的 `.o` 文件，所以这次实际在哪台机器上跑的没有记录；eval 日志最后修改于 01:12，json 写于 01:14。
+PBS 21821，yayoi28 RTX 3090，01:08:06–01:14:57，`ALL DONE`（`e3d_atomderiv_G1.o21821`）。
+当时 181 的 NFS 目录缓存过期，看不到这个 `.o`；后来在 183 上列目录才找到。
 日志在 `logs/atom_deriv_G1_rep{1,2,3}{,_report}.log`，结果在 `runs/CyclophilinD_ligand-8/rep{r}/atom_deriv_G1.json`。每个重复 25/25 窗完成。
 
 这里算的是 MM 路径 S0→S1 上的逐原子贡献 b_(1,i)（kJ/mol）。用来对照的是同一批帧上独立算出的相邻 BAR ΔF^V（本文前一节）。
