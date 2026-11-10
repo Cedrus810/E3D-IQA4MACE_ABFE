@@ -123,7 +123,7 @@ def atomic_save(path, data):
 
 
 def run_recorded(c, ig, energy, rng, x0, eta, cycles, out, contract, kernel,
-                 checkpoint_every=50, coords_every=10, log_every=0):
+                 checkpoint_every=50, coords_every=10, log_every=0, device=None):
     """eta_records.run_recorded with the K2 schema. The restart recheck re-queries the last state once and
     compares the scalar and every K2 component (incl. C_bb, q, Omega) with the committed record."""
     if contract.get("E_construction") != TARGET:
@@ -141,13 +141,17 @@ def run_recorded(c, ig, energy, rng, x0, eta, cycles, out, contract, kernel,
     saved_path = out if out.exists() else progress if progress.exists() else None
     if saved_path is not None:
         old, data = read_record(saved_path)
-        check_contract(old, want)
+        check_contract({k: v for k, v in old.items() if k != "checkpoint_device"}, want)
         if old["complete"]:
             if saved_path != out:
                 atomic_save(out, data)
                 progress.unlink(missing_ok=True)
             print(f"{out.name}: complete {SCHEMA} chain reused", flush=True)
             return old
+        # Context checkpoints loaded on another GPU model can silently corrupt MM integration (eta_exchange.py:31-35).
+        if old.get("checkpoint_device") != device:
+            raise RuntimeError(f"checkpoint written on {old.get('checkpoint_device')!r}, this process is {device!r}: "
+                               "resume on the same GPU model, or keep this file and start a new tag")
         try:
             c.loadCheckpoint(data["checkpoint"].tobytes())
         except Exception as err:
@@ -186,7 +190,7 @@ def run_recorded(c, ig, energy, rng, x0, eta, cycles, out, contract, kernel,
                     **{"prop_" + k: v for k, v in o["prop_details"].items()}})
         arrays = {k: np.concatenate([arrays[k], v]) if k in arrays else v for k, v in new.items()}
         initial, done = o["final_state"], now
-        meta = {**want, "completed_cycles": done, "complete": done == cycles,
+        meta = {**want, "checkpoint_device": device, "completed_cycles": done, "complete": done == cycles,
                 "seconds": prior_seconds + time.perf_counter() - started,
                 "model_calls_this_process": getattr(energy, "calls", 0),
                 "restart_policy": "exact compatible Context + acceptance RNG; no coordinate-only fallback"}

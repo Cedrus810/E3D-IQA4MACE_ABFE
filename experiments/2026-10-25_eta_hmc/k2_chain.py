@@ -58,8 +58,11 @@ def main(a):
             "integrator_definition": openmm.XmlSerializer.serialize(ig), "openmm_version": openmm.__version__,
             "platform": a.platform, "model_device": a.device,
             "acceptance_seed": seed, "proposal_seed": seed + 1, "energy_units": "kJ/mol", "xyz_units": "nm"}
+    import torch
+    device = torch.cuda.get_device_name(torch.cuda.current_device()) if a.platform == "CUDA" else a.platform
     meta = run_recorded(c, ig, me, rng, x0, a.eta, a.cycles, out, want, eh.hmc,
-                        checkpoint_every=a.checkpoint_every, coords_every=a.coords_every, log_every=a.log_every)
+                        checkpoint_every=a.checkpoint_every, coords_every=a.coords_every, log_every=a.log_every,
+                        device=device)
     print(f"{out.name}: complete={meta['complete']}; {meta['completed_cycles']} cycles; "
           f"model calls this process {me.calls}; {me.seconds / max(me.calls, 1):.2f} s per K2 query", flush=True)
 

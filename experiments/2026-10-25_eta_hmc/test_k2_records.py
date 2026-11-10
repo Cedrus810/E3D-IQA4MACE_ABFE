@@ -58,7 +58,7 @@ def contract(eta=1.0, start="a"):
             "energy_units": "kJ/mol", "xyz_units": "nm"}
 
 
-def run_toy(out, kernel=eh.hmc, eta=1.0, start="a", seed=19, cycles=40):
+def run_toy(out, kernel=eh.hmc, eta=1.0, start="a", seed=19, cycles=40, device=None):
     c, ig = toy_context()
     energy = AnalyticK2()
     x0 = np.zeros((5, 3))
@@ -66,7 +66,8 @@ def run_toy(out, kernel=eh.hmc, eta=1.0, start="a", seed=19, cycles=40):
     try:
         with contextlib.redirect_stdout(io.StringIO()):
             meta = kr.run_recorded(c, ig, energy, np.random.default_rng(seed), x0, eta, cycles, out,
-                                   contract(eta, start), kernel, checkpoint_every=7, coords_every=3)
+                                   contract(eta, start), kernel, checkpoint_every=7, coords_every=3,
+                                   device=device)
         return meta, energy.calls
     finally:
         del c, ig
@@ -148,6 +149,30 @@ class TestK2Records(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "require E_construction"):
                 kr.run_recorded(None, None, None, None, None, 1.0, 1, p, {**contract(), "E_construction": "local_E v1"},
                                 eh.hmc)
+
+
+class TestK2Device(unittest.TestCase):
+    def test_resume_only_on_writing_gpu_model(self):
+        with tempfile.TemporaryDirectory() as td:
+            p = Path(td) / "d.npz"
+            n = 0
+
+            def fail(*args, **kw):
+                nonlocal n
+                n += 1
+                if n == 2:
+                    raise RuntimeError("stop")
+                return eh.hmc(*args, **kw)
+
+            with self.assertRaises(RuntimeError):
+                run_toy(p, fail, device="gpuA")
+            progress = p.with_name("d.progress.npz")
+            before = progress.read_bytes()
+            with self.assertRaisesRegex(RuntimeError, "same GPU model"):
+                run_toy(p, device="gpuB")
+            self.assertEqual(progress.read_bytes(), before)
+            run_toy(p, device="gpuA")
+            self.assertEqual(run_toy(p, device="gpuB")[1], 0)      # a completed record is reusable anywhere
 
 
 class TestK2Report(unittest.TestCase):
