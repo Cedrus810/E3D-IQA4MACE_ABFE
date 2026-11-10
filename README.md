@@ -54,6 +54,13 @@ arithmetic from sampling convergence. Validation ladder: **A** dimers →
 **B** FreeSolv solvation → **C** SAMPL host–guest → **D** protein–ligand ABFE
 (currently at stage **A** scale on DES370K dimers).
 
+**Parallel line — eta-HMC with the K2 head (2026-11)**: exchange moves landed with tests
+(`experiments/2026-10-25_eta_hmc/k2_exchange.py`); the acetamide pilot series ran
+PLAN → PLAN_B → RESULT with PBS scripts and reports (`experiments/2026-11-08_k2_eta_acetamide/`);
+the K2 head-calibration MM reference preps are recorded under
+`experiments/2026-11-07_head_calibration/`, and the small-solute reassessment
+(target audit, acetamide fidelity/entry, analytic long-range) is in the 2026-11-08 batch.
+
 - **Negative control reproduces** (WP1): without IQA supervision the node/edge
   split does not converge to IQA on its own — 28× off on synthetic labels, 49×
   on a frozen `mace-omol-0` backbone; with supervision it reorganises at almost

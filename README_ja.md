@@ -49,6 +49,12 @@ D_LE = Σ_{i∈L} Σ_{a∈E} D_ia                （配体–環境結合）
 検証の階段：**A** 二量体 → **B** FreeSolv 溶媒和 → **C** SAMPL ホスト–ゲスト
 → **D** タンパク質–リガンド ABFE（現在は DES370K 二量体のステージ A 規模）。
 
+**並行ライン——K2 ヘッドの eta-HMC（2026-11）**：交換ムーブはテスト付きで着地
+（`experiments/2026-10-25_eta_hmc/k2_exchange.py`）。アセトアミドパイロット群は
+PLAN → PLAN_B → RESULT と進行（PBS スクリプトと報告は `experiments/2026-11-08_k2_eta_acetamide/`）。
+K2 ヘッド較正の MM 参照調製は `experiments/2026-11-07_head_calibration/` に記録。
+小溶質の再評価（target audit、acetamide 忠実度/入口、解析長距離）は 2026-11-08 バッチ。
+
 - **陰性対照が再現される**（WP1）：IQA 教師なしでは、ノード/エッジ分割は
   自力では IQA に収束しません —— 合成ラベルで 28 倍、凍結 `mace-omol-0`
   バックボーンで 49 倍のズレ。教師を入れると、E/F 精度をほぼ変えずに再編成されます。

@@ -46,6 +46,12 @@ D_LE = Σ_{i∈L} Σ_{a∈E} D_ia                （配体–环境耦合）
 溶剂化 → **C** SAMPL 主客体 → **D** 蛋白质–配体 ABFE（当前在 DES370K 二聚体的
 A 阶段尺度）。
 
+**并行线——K2 头的 eta-HMC（2026-11）**：exchange 移动已落地（带测试，
+`experiments/2026-10-25_eta_hmc/k2_exchange.py`）；acetamide pilot 系列按
+PLAN → PLAN_B → RESULT 推进（PBS 脚本与报告在 `experiments/2026-11-08_k2_eta_acetamide/`）；
+K2 头标定的 MM 参考制备记录在 `experiments/2026-11-07_head_calibration/`，
+小溶质复核（target audit、acetamide 保真度/入口、解析长程）在 2026-11-08 批次。
+
 - **阴性对照可复现**（WP1）：没有 IQA 监督时，节点/边拆分不会自己收敛到
   IQA——合成标签下差 28 倍，冻结 `mace-omol-0` 骨架下差 49 倍；加了监督，
   它在 E/F 精度几乎不变的情况下完成重组。
