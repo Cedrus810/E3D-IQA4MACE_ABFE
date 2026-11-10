@@ -7,12 +7,12 @@
 # ← -q：walltime > 72h 改成 week
 #PBS -q default
 # ← select：host 填空节点；ncpus/ngpus/mem 按节点改（纯 CPU 节点去掉 ngpus）
-#PBS -l select=1:ncpus=32:ngpus=1:mem=60gb:host=yayoi41
+#PBS -l select=1:ncpus=32:ngpus=1:mem=60gb:host=yayoiXX
 # ← walltime：default 最多 72h；week 最多 144h
 #PBS -l walltime=24:00:00
 #PBS -j oe
 # ← -N：作业名
-#PBS -N k2eta_pilotA
+#PBS -N k2B2_30
 test $PBS_O_WORKDIR && cd $PBS_O_WORKDIR
 . /home/apps/Modules/init/profile.sh
 export MODULEPATH=/home/ruigengji/modulefiles:$MODULEPATH
@@ -23,19 +23,21 @@ export MAMBA_ROOT_PREFIX=/home/ruigengji/miniforge3
 source /home/ruigengji/miniforge3/etc/profile.d/mamba.sh
 mamba activate openmm_dev                                  # ← 环境名
 
-cd /home/ruigengji/E3D/experiments/2026-10-25_eta_hmc     # ← 项目目录（k2_chain.py 写 runs/acetamide/）
-export OMP_NUM_THREADS=2 MKL_NUM_THREADS=2                 # ← 8 进程 × 2 = 16 = 9950X3D 物理核数
+cd /home/ruigengji/E3D/experiments/2026-10-25_eta_hmc     # ← 项目目录（k2_exchange.py 写 runs/acetamide/）
+export OMP_NUM_THREADS=8 MKL_NUM_THREADS=8                 # ← 2 进程 × 8 = 16 = 5950X 物理核
 P=/home/ruigengji/miniforge3/envs/openmm_dev/bin/python    # ← 和环境名一起改
 echo "=== $(date '+%F %T')  host $(hostname) ==="
 nvidia-smi --query-gpu=name,memory.total --format=csv,noheader
 
-# ← 运行命令：44 条链（prep 为外层，η 为内层），同时 8 个进程；重提同一脚本即续跑（已完成的链直接复用）
-export P HC=/home/ruigengji/E3D/experiments/2026-11-07_head_calibration LG=/home/ruigengji/E3D/experiments/2026-11-08_k2_eta_acetamide/logs
-export HEAD=/home/ruigengji/E3D/runs/polar-M/ckpt/joint_organic_n50000_c10000_lampool400_solvent_es_resp_v2_h256_s104000_nvar_N.pt
-export BB=/home/ruigengji/MLP/mace/MACE-POLAR-1-M.model
-for p in 1 2 3 4; do for e in 0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0; do echo "$e $p"; done; done | \
-  xargs -P 8 -L 1 sh -c '$P -u k2_chain.py acetamide --eta $0 --start-file $HC/mm/prep$1_S0.npz --start-label prep$1 \
-    --head $HEAD --backbone $BB --cycles 500 --checkpoint-every 50 --coords-every 10 --tag _pilotA \
-    > $LG/eta$0_prep$1.log 2>&1 || echo "FAILED eta=$0 prep=$1"'
-
+# ← 运行命令：试点 B2（--eta0-mm-updates 25；host 待填空节点），prep 3 4 各一个 11 标签梯子，同时跑；重提同一脚本即续跑
+HC=/home/ruigengji/E3D/experiments/2026-11-07_head_calibration
+LG=/home/ruigengji/E3D/experiments/2026-11-08_k2_eta_acetamide/logs/pilotB
+HEAD=/home/ruigengji/E3D/runs/polar-M/ckpt/joint_organic_n50000_c10000_lampool400_solvent_es_resp_v2_h256_s104000_nvar_N.pt
+BB=/home/ruigengji/MLP/mace/MACE-POLAR-1-M.model
+for p in 3 4; do
+  ( $P -u k2_exchange.py acetamide --etas 0,0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9,1 --start-file $HC/mm/prep${p}_S0.npz \
+      --start-label prep$p --head $HEAD --backbone $BB --init last --sweeps 500 --checkpoint-every 50 --coords-every 10 \
+      --eta0-mm-updates 25 --tag _pilotB2 > $LG/B2_prep$p.log 2>&1 || echo "FAILED B2 prep$p" ) &
+done
+wait
 echo "=== done $(date '+%F %T') ==="

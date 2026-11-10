@@ -73,3 +73,27 @@ acetamide S0，起点是第 2 步 prep1 的末帧，η = 0／0.5／1，各 20 �
 - 生产规模的 K2 η 运行（多起点、η 网格、预算），需要单独的计划表。
 - 每次查询 4 次 backbone forward，没有优化。
 - 5090 上没跑过。
+
+# K2 实施第三项：η 副本交换移植与跨 GPU 保护（2026-11-08，Claude，用户批准“做”）
+
+起因：试点 A（`../2026-11-08_k2_eta_acetamide/RESULT.md`）中，各起点算出的 a_0^K2 相差 2.5 RT，高 η 采样是瓶颈。
+
+## 改动（`experiments/2026-10-25_eta_hmc/`；`eta_exchange.py`、`eta_records.py` 等旧文件没改）
+
+| 文件 | 内容 |
+|---|---|
+| `k2_exchange.py`（新） | `eta_exchange.run_ladder` 的 K2 版本：算法、交换顺序、事务和续跑规则都不变，直接复用 `exchange_step` 等函数。记录格式 `k2_exchange-1`，每个 walker、每个 sweep 都检查 K2 记账；固定 η 的标签视图是 `label_dU`、`label_d_atom`、`label_q`。检查点只在写它的同型号 GPU 上加载，型号不同就改从缓存坐标续接，并记一条 continuation（沿用 `eta_exchange.py:31–35` 的做法）。支持 `--eta0-mm-updates`。输出 `runs/<体系>/k2ladder_S{state}_{label}{tag}.npz` |
+| `k2_report.py`（改） | 把共用的统计部分抽出来成为 `summarize`；新增 `report_ladders`：每个梯子算一个起点，从标签视图算 A_i^H、R、a^TI、a^BAR、ε_eta，并附各相邻对的交换接受率。原来的 `report` 结果不变（原测试照样通过） |
+| `k2_records.py`、`k2_chain.py`（改） | 补上跨 GPU 保护：记录写入 `checkpoint_device`；续跑未完成的链时，GPU 型号不同就报错停下（不加载检查点）；已完成的链在哪台机器上都能复用。试点 A 的 η=0.3 prep1 progress 文件没有这个字段，会被拒绝续接 |
+| `test_k2_exchange.py`（新）、`test_k2_records.py`（改） | 交换梯子 5 项：记账和调用次数、中断后逐位重放、复用、换 GPU 改从坐标续接、篡改 q／C_bb／标签视图／交换决定都会被拦下、新旧格式互相拒绝、换后端拒绝续接、η=0 多次 MM 更新、梯子报告的闭合；另加链的同型号 GPU 保护 1 项 |
+
+测试：K2 共 19 项通过（`logs/test_k2_exchange_20261108.log`）；旧 `test_atomic_records` 加 `test_eta_exchange` 13 项回归通过。
+
+## CUDA 冒烟（181 2080 Ti）
+
+acetamide S0，11 个 η（0–1，间隔 0.1），起点 prep2 末帧，20 sweep，tag `_cudasmoke`，日志在 `logs/k2_ladder_smoke/`。
+- 第 5 个 sweep 提交后被 timeout 中断，同一命令续到 20 个 sweep；再跑一次直接复用，模型调用 0 次。同一 GPU 续跑，没有 continuation。
+- 模型调用 231 次（11 × 21）；每次 K2 查询 0.78 s（单进程）。
+- 记录通过验证，Σd + q − dU 最大 5.0e−14。CPU 复算 4 个 walker 状态，最大差 1.7e−8 kJ/mol。
+- 10 个相邻对的交换接受率 0.6–1.0；20 个 sweep 内，有 2 个 walker 同时到过 η=0 和 η=1。
+- 梯子报告端到端跑通（数值没有意义）：ΣA + R − a^TI = 0，ε_eta = −0.012。
